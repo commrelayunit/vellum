@@ -13,6 +13,11 @@ The goal is a simple shared writing surface: project files, live Markdown editin
 - named checkpoints, diffs, and restore
 - Markdown first; later export/sync paths for LaTeX, GitHub, OSF, and Overleaf
 
+## Docs
+
+- [Product spec](docs/SPEC.md)
+- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
+
 ## Brand
 
 Initial brand assets live in `assets/brand/`.
