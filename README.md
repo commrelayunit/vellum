@@ -9,9 +9,9 @@ The goal is a simple shared writing surface: project files, live Markdown editin
 - document-first interface
 - quiet paper/ink visual language
 - live collaborator presence without theatrical typing
-- range-aware C-3PO review and rewrite actions
+- range-aware agent review and rewrite actions
 - named checkpoints, diffs, and restore
-- Markdown first; later export/sync paths for LaTeX, GitHub, OSF, and Overleaf
+- Markdown first; later export/sync paths for repositories and document systems
 
 ## Docs
 
@@ -31,4 +31,4 @@ The primary mark should stay free of notification dots, badges, mascot marks, or
 
 Concept / pre-MVP.
 
-The current implementation target is a private Mission Control MVP before extracting a standalone self-hosted app.
+The current implementation target is a small self-hostable MVP.

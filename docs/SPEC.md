@@ -1,41 +1,12 @@
----
-type: project
-status: concept
-summary: Private, self-hostable collaborative writing workspace with project files, live Markdown editing, file-scoped chat, C-3PO agent edits, and git-like history.
-owner: C-3PO
-related_people: [Velitchko, C-3PO, R2-D2]
-related_projects: [Mission Control, GraphMate, In My Voice]
-related_topics: [Collaborative Writing, Agent Interfaces, Markdown, Versioning]
-related_practices: [Knowledge Base First Practice, Coding Harness Practice, Task Decomposition Practice]
-candidate_names: [Vellum, Quire, Verso, Draftroom, Margin, Linea]
-repository: https://github.com/commrelayunit/vellum
-next_milestone: Turn this concept into a Mission Control implementation brief and MVP task artifact.
----
-
 # Vellum Writing Workspace
 
-## Working Name
+## Name
 
 **Vellum**.
 
-Rationale: the tool is a serious shared writing surface for humans and agents. Vellum is short, memorable, writing-native, and broad enough to open-source later without sounding tied to GraphMate or C-3PO.
-
-Other candidate names:
-
-- **Quire**: distinctive and writing-native, but slightly obscure.
-- **Verso**: polished book/page reference, product-ready.
-- **Draftroom**: clear and practical, but two-word/compound feel.
-- **Margin**: simple and tied to comments/agent presence, but generic.
-- **Linea**: elegant text/line/versioning feel, but abstract.
-- **Marginalia**: conceptually apt but too awkward as a product name.
-
-Current recommendation: use **Vellum** for the project and reserve a more explicit subtitle:
+Vellum is a serious shared writing surface for humans and agents. The name is short, writing-native, and broad enough for a self-hostable product without sounding tied to any one project or agent runtime.
 
 > Vellum: a shared writing workspace for humans and agents.
-
-Earlier working name: **Marginalia**.
-
-Repository: [commrelayunit/vellum](https://github.com/commrelayunit/vellum).
 
 ## Visual Identity and Look
 
@@ -107,7 +78,7 @@ Vellum should feel calm and low-friction:
 - project/file navigation available but visually secondary;
 - chat attached to the current file/range, not floating as a separate product;
 - comments and suggestions visible when needed, quiet when not;
-- C-3PO presence shown as range focus, status, and pending actions rather than theatrical typing.
+- agent presence shown as range focus, status, and pending actions rather than theatrical typing.
 
 Default layout should support:
 
@@ -121,7 +92,7 @@ Default layout should support:
 
 Interface copy should be short and practical:
 
-- "Ask C-3PO"
+- "Ask agent"
 - "Propose edit"
 - "Apply"
 - "Reject"
@@ -133,20 +104,18 @@ Avoid hype wording such as "unlock creativity", "AI-powered magic", or "supercha
 
 ## Problem
 
-Current C-3PO writing collaboration is split across Telegram, email, Overleaf, local files, GitHub pull requests, OSF text, and one-off Markdown attachments. This creates predictable friction:
+Document-centered writing with agents is often split across chat, local files, shared documents, pull requests, and one-off attachments. This creates predictable friction:
 
 - paragraph-level context gets lost in chat;
 - drafts are duplicated across channels;
 - edits are hard to compare or restore;
-- C-3PO receives text as pasted fragments rather than file/range-aware context;
-- support prose such as README files, demo scripts, submission notes, and reviewer responses has no canonical workspace;
+- agents receive text as pasted fragments rather than file/range-aware context;
+- support prose such as README files, documentation, notes, proposals, and review responses has no canonical workspace;
 - the collaboration loop is not private, live, or structured around projects.
-
-The immediate trigger was GraphMate VISxGenAI writing: paper edits live in Overleaf, support prose moved through Telegram/email, and version boundaries became annoying quickly.
 
 ## Product Goal
 
-Build a private collaborative writing environment where Velitchko and C-3PO can work on project documents together.
+Build a private collaborative writing environment where people and agents can work on project documents together.
 
 The workspace should combine:
 
@@ -156,20 +125,14 @@ The workspace should combine:
 - agent-assisted rewrite/review actions;
 - visible cursors and selections;
 - git-like history, diffs, and restore;
-- export paths for Markdown, plain text, and later LaTeX / OSF / GitHub / Overleaf flows.
+- export paths for Markdown, plain text, and later repository or document-sync workflows.
 
 The core shift is to make the document the center of the interaction. Chat becomes attached to files, selections, and project state.
 
-## Intended Users
+Intended users:
 
-Initial users:
-
-- Velitchko as writer/reviewer.
-- C-3PO as writing partner and agent operator.
-
-Open-source/self-hosted users later:
-
-- researchers writing papers, READMEs, rebuttals, grant text, documentation, and teaching materials with an agent;
+- writers, researchers, maintainers, and small teams working on structured text with an agent;
+- people writing papers, READMEs, proposals, documentation, notes, teaching material, and review responses;
 - small labs or teams who want a private writing surface without sending every draft through public SaaS tools;
 - agent builders who need a simple document-centered interface for range-aware edits and provenance.
 
@@ -189,18 +152,18 @@ Open-source/self-hosted users later:
 - Version history, named versions, diffs, restore.
 - Git-backed project export/checkpoints.
 - Download/export as `.md` and `.txt`.
-- Mission Control integration for the first private deployment.
+- Self-hostable application foundation.
 
 ### Later Scope
 
-- Overleaf Git pull/push for LaTeX projects.
-- GitHub repository sync for README/docs.
-- OSF README export packaging.
+- Repository sync for README/docs.
+- Package/export workflows for review bundles or project handoffs.
+- LaTeX import/export for academic writing.
 - Google Docs import/export.
 - Comment threads anchored to ranges.
 - Suggested edits mode with accept/reject per hunk.
 - Session replay or browser-operation trace for agent browser-control sessions.
-- Voice-profile selection, e.g. "Velitchko paper voice", "demo narration voice".
+- Voice/profile selection, e.g. "paper voice", "documentation voice", "working notes voice".
 - Reusable prompt/action templates.
 
 ### Out of Scope for MVP
@@ -240,18 +203,18 @@ Three-pane interface:
 
 ### Typical Flow
 
-1. Velitchko opens `GraphMate / OSF README.md`.
-2. He highlights a paragraph and writes: "make this less promotional and more review-package oriented".
-3. C-3PO receives:
+1. A writer opens `Project Alpha / README.md`.
+2. They highlight a paragraph and write: "make this clearer and less promotional".
+3. The agent receives:
    - project metadata;
    - file path;
    - full file or relevant context window;
    - selected range;
    - user instruction;
    - active voice/profile hint.
-4. C-3PO returns a proposed patch.
+4. The agent returns a proposed patch.
 5. The UI shows a diff card.
-6. Velitchko applies, edits manually, or rejects.
+6. The writer applies, edits manually, or rejects.
 7. The accepted edit becomes a versioned change with provenance.
 
 ## Agent Integration
@@ -280,15 +243,15 @@ Every operation should record:
 - accepted/rejected/applied state;
 - resulting version id.
 
-Important UX rule: C-3PO should not "type" character by character. For small requested fixes, direct edits are acceptable. For larger rewrites, the default should be proposed patches with diff/apply.
+Important UX rule: agents should not "type" character by character. For small requested fixes, direct edits are acceptable. For larger rewrites, the default should be proposed patches with diff/apply.
 
 ## Agent Presence and Browser Control
 
-Vellum should make C-3PO feel present in the workspace without making browser automation the core editing mechanism.
+Vellum should make the agent feel present in the workspace without making browser automation the core editing mechanism.
 
 ### Default Model: Agent-as-Service With Live Presence
 
-The default implementation should route C-3PO through the structured agent bridge and render that activity as live collaborator presence.
+The default implementation should route the agent through the structured agent bridge and render that activity as live collaborator presence.
 
 Visible presence states:
 
@@ -301,17 +264,17 @@ Visible presence states:
 - applied patch animation or compact diff;
 - activity log entries for read/propose/apply/reject/commit events.
 
-This gives Velitchko live feedback about what C-3PO is doing while keeping edits auditable, versionable, and permission-controlled.
+This gives the writer live feedback about what the agent is doing while keeping edits auditable, versionable, and permission-controlled.
 
 The app should treat agent presence as first-class collaboration state, similar to Yjs awareness, but separate from ordinary human cursor movement. The useful signal is not a theatrical cursor; it is anchored intent: which document area is being inspected, what action is pending, and what changed.
 
 ### Optional Mode: Agent-as-Browser-User
 
-Vellum can also support an explicit browser-control mode where C-3PO opens the app through a browser automation session and interacts with the UI like a remote collaborator.
+Vellum can also support an explicit browser-control mode where the agent opens the app through a browser automation session and interacts with the UI like a remote collaborator.
 
 Use cases:
 
-- inspect the UI exactly as Velitchko sees it;
+- inspect the UI exactly as the writer sees it;
 - test collaborative editing behavior;
 - operate controls that are not yet exposed through structured APIs;
 - debug layout, auth, permissions, or document state problems;
@@ -319,7 +282,7 @@ Use cases:
 
 Possible browser-user affordances:
 
-- visible C-3PO cursor;
+- visible agent cursor;
 - live selection;
 - typing indicator;
 - file navigation events;
@@ -336,11 +299,11 @@ Use browser-control mode only when the task is about the UI itself, when a struc
 
 Example:
 
-1. C-3PO "enters" `GraphMate / OSF README.md`.
-2. The editor highlights the selected paragraph as C-3PO's active range.
-3. Chat shows "C-3PO is drafting a proposed edit".
+1. The agent "enters" `Project Alpha / README.md`.
+2. The editor highlights the selected paragraph as the agent's active range.
+3. Chat shows "the agent is drafting a proposed edit".
 4. A diff card appears.
-5. Velitchko applies or rejects it.
+5. The writer applies or rejects it.
 6. The action is stored as provenance and linked to a snapshot/named version.
 
 ## Collaboration Model
@@ -356,13 +319,13 @@ Recommended stack:
 
 Visible collaborator state:
 
-- Velitchko cursor/selection.
-- C-3PO active range or pending edit card.
-- Optional "C-3PO is reading this file" / "C-3PO proposed an edit" indicators.
+- writer cursor/selection.
+- agent active range or pending edit card.
+- Optional "the agent is reading this file" / "the agent proposed an edit" indicators.
 
 Avoid making the agent cursor cute or theatrical. The useful primitive is anchored intent: what range is being reviewed, edited, or commented on.
 
-For the C-3PO presence layer, model awareness as operation state rather than only cursor coordinates:
+For the agent presence layer, model awareness as operation state rather than only cursor coordinates:
 
 - `agent_reading_file`;
 - `agent_reviewing_range`;
@@ -396,10 +359,10 @@ Purpose: restore recent work and inspect what changed during a session.
 
 Users can mark a state as a named version:
 
-- "OSF README uploaded";
-- "demo narration before ElevenLabs";
-- "abstract before final compression";
-- "submission package final".
+- "README published";
+- "draft before review";
+- "notes before handoff";
+- "release text final".
 
 Named versions support:
 
@@ -415,7 +378,7 @@ Every agent edit links request, context, proposed patch, and accepted result.
 
 This matters because writing agents can otherwise silently flatten voice, scope, or claims. Provenance should make it possible to answer:
 
-- What did we ask C-3PO to change?
+- What did we ask agent to change?
 - Which text was selected?
 - What patch was proposed?
 - Was it accepted as-is, edited, or rejected?
@@ -431,7 +394,7 @@ Benefits:
 
 - durable portable history;
 - easy export;
-- possible GitHub/Overleaf sync later;
+- possible GitHub/LaTeX editor sync later;
 - recovery outside the app;
 - familiar diff semantics.
 
@@ -510,11 +473,11 @@ Open-source README should emphasize:
 
 ## Security and Privacy
 
-MVP should remain private inside Mission Control.
+MVP deployments should be private by default.
 
 Minimum requirements:
 
-- reuse Mission Control auth;
+- require authentication for project access;
 - no public anonymous edit links;
 - server-side permission checks on project/file access;
 - audit log for agent edits;
@@ -526,46 +489,44 @@ Minimum requirements:
 For open-source self-hosting:
 
 - document that operators are responsible for securing their agent/LLM endpoints;
-- avoid bundling any personal C-3PO secrets or OpenClaw-specific credentials;
+- avoid bundling any personal agent secrets or external agent runtime-specific credentials;
 - provide `.env.example`;
 - keep provider adapters optional.
 
-## Mission Control Integration
+## Application Shell
 
-First implementation target should be Mission Control, because:
+The first implementation should be a small self-hostable application shell rather than a full publishing suite.
 
-- it is already the private C-3PO operational surface;
-- authentication and deployment exist;
-- the main use case is C-3PO-assisted project work;
-- building a separate app would create avoidable hosting and auth overhead.
+Core shell requirements:
 
-Mission Control route:
+- authenticated workspace;
+- project and file navigation;
+- Markdown editor;
+- file/range-aware chat;
+- agent action bridge;
+- snapshot/version storage;
+- export/download.
 
-- `/writing`
-- or `/workspace/writing`
+Suggested routes:
 
-Initial sidebar entry:
-
-- **Writing**
-
-Initial seed project:
-
-- `GraphMate / VISxGenAI`
+- `/`
+- `/projects`
+- `/projects/:projectId/files/:fileId`
 
 Initial seed files:
 
-- `OSF README.md`
-- `Demo narration.md`
-- `Abstract variants.md`
-- `Submission checklist.md`
+- `README.md`
+- `Draft.md`
+- `Notes.md`
+- `Checklist.md`
 
 ## MVP Milestones
 
 ### M0: Specification and Decision
 
-- Save project note.
+- Save product spec.
 - Confirm working name.
-- Confirm Mission Control as implementation target.
+- Confirm self-hostable application shell as implementation target.
 - Decide MVP editor stack.
 
 ### M1: Local Private Workspace
@@ -580,7 +541,7 @@ Initial seed files:
 
 - Chat panel.
 - Messages can be project-scoped or file-scoped.
-- Include current file context when invoking C-3PO.
+- Include current file context when invoking agent.
 
 ### M3: Selection-Aware Agent Edits
 
@@ -589,9 +550,9 @@ Initial seed files:
 - Agent returns proposed replacement.
 - UI shows apply/reject.
 
-### M3.5: C-3PO Live Presence
+### M3.5: Agent Live Presence
 
-- Show C-3PO's active file/range.
+- Show agent's active file/range.
 - Show reading/reviewing/proposing/applying states.
 - Render proposed edits as live pending cards.
 - Record all presence-backed actions in the activity log.
@@ -617,7 +578,7 @@ Initial seed files:
 
 ### M7: Browser-Control Escape Hatch
 
-- Launch a controlled browser session for C-3PO.
+- Launch a controlled browser session for agent.
 - Show browser-control active state in the workspace.
 - Support UI inspection and limited manual operation.
 - Store optional trace/session metadata.
@@ -629,8 +590,8 @@ Order note: live collaboration is valuable, but MVP utility starts earlier with 
 - CodeMirror or TipTap for Markdown editing?
 - Should live collaboration be included in the first PR, or staged after basic save/chat?
 - Where should writing project git repos live on disk?
-- Should C-3PO agent calls use the existing OpenClaw session API directly, or a narrower internal "writing action" API?
-- How much of Mission Control's existing task/session model can be reused?
+- Should agent calls use an external agent runtime directly, or a narrower internal "writing action" API?
+- Which application services need to be abstracted for standalone self-hosting?
 - Should named versions create git commits automatically, or only when the user clicks "checkpoint"?
 - Should suggestions be line-based diffs, range replacements, or richer prose-edit cards?
 - Which agent presence states are enough for MVP without overbuilding a session-observability system?
@@ -639,18 +600,18 @@ Order note: live collaboration is valuable, but MVP utility starts earlier with 
 
 ## Initial Recommendation
 
-Build Vellum inside Mission Control as a private MVP.
+Build Vellum as a small self-hostable private MVP.
 
 Do not start with the full collaborative editor. Start with:
 
 1. project/files;
 2. Markdown editor;
 3. file-scoped chat;
-4. selection-aware C-3PO rewrite/review;
-5. C-3PO live presence for active file/range and pending edits;
+4. selection-aware agent rewrite/review;
+5. agent live presence for active file/range and pending edits;
 6. snapshots and named versions;
 7. export/download.
 
 Then add Yjs live editing, git-backed checkpointing, and browser-control mode as an escape hatch for UI inspection/manual operation.
 
-This gets the immediate GraphMate writing problem out of Telegram/email quickly while leaving a clean path toward a self-hostable open-source tool.
+This gets document-centered writing out of scattered chat/files quickly while leaving a clean path toward a self-hostable open-source tool.

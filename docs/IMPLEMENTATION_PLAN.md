@@ -1,15 +1,15 @@
 # Vellum Implementation Plan
 
-Vellum should start as a private Mission Control feature and later become a standalone self-hostable app if the core workflow holds up.
+Vellum should start as a small self-hostable application and grow only after the core workflow holds up.
 
 The first useful version is not a full Google Docs clone. It is a quiet Markdown workspace where a document, its file context, chat, proposed edits, and history stay together.
 
 ## Guiding Decisions
 
-- Build the private MVP inside Mission Control first.
+- Build the self-hosted MVP first.
 - Keep Markdown as the first editing format.
 - Use structured agent operations for document changes.
-- Render C-3PO activity as live presence, not character-by-character typing.
+- Render agent activity as live presence, not character-by-character typing.
 - Treat git as a durable checkpoint/export layer, not the primary UI.
 - Defer multi-user CRDT polish until project/files/chat/range edits are useful.
 
@@ -22,7 +22,7 @@ The first useful version is not a full Google Docs clone. It is a quiet Markdown
 - Markdown editor with preview toggle or split view
 - File/range-aware chat panel
 - Proposed edit cards with Apply / Reject
-- Presence indicators for C-3PO active file/range/state
+- Presence indicators for agent active file/range/state
 
 Recommended editor stack:
 
@@ -39,14 +39,14 @@ Core backend responsibilities:
 - snapshot and named-version storage
 - chat message storage
 - agent action records
-- C-3PO writing action bridge
+- agent writing action bridge
 - optional git materialization for checkpoints
 
 Initial storage can be ordinary application database tables. Yjs update storage can be added when live collaboration arrives.
 
 ### Agent Bridge
 
-The app should call C-3PO through a narrow writing-action interface, not by sending loose chat transcripts.
+The app should call agent through a narrow writing-action interface, not by sending loose chat transcripts.
 
 Each request should include:
 
@@ -84,8 +84,8 @@ Deliverables:
 Verification:
 
 - docs are committed and pushed
-- repo is private
-- Velitchko has collaborator access
+- brand assets are present
+- docs avoid project-specific assumptions
 
 ### M1: Local Private Workspace
 
@@ -110,7 +110,7 @@ Verification:
 
 ### M2: Chat Bound to Project/File
 
-Goal: stop passing writing context through Telegram.
+Goal: stop passing writing context through chat.
 
 Deliverables:
 
@@ -128,7 +128,7 @@ Verification:
 
 ### M3: Selection-Aware Agent Edits
 
-Goal: make C-3PO useful at paragraph/range level.
+Goal: make the agent useful at paragraph/range level.
 
 Deliverables:
 
@@ -147,9 +147,9 @@ Verification:
 - apply and reload
 - reject leaves content unchanged
 
-### M3.5: C-3PO Live Presence
+### M3.5: Agent Live Presence
 
-Goal: make C-3PO visibly present without pretending to type.
+Goal: make the agent visibly present without pretending to type.
 
 Deliverables:
 
@@ -162,7 +162,7 @@ Deliverables:
 Verification:
 
 - trigger a request
-- see C-3PO active range/state update
+- see the agent active range/state update
 - apply/reject clears or updates presence state
 
 ### M4: History and Named Versions
@@ -219,7 +219,7 @@ Verification:
 
 ### M7: Browser-Control Escape Hatch
 
-Goal: let C-3PO inspect and operate the UI when structured APIs are missing.
+Goal: let the agent inspect and operate the UI when structured APIs are missing.
 
 Deliverables:
 
@@ -237,22 +237,22 @@ Verification:
 
 ## First Seed Project
 
-Use GraphMate as the first realistic project.
+Use a generic documentation/drafting project as the first realistic seed.
 
 Seed files:
 
-- `OSF README.md`
-- `Demo narration.md`
-- `Abstract variants.md`
-- `Submission checklist.md`
+- `README.md`
+- `Draft.md`
+- `Notes.md`
+- `Checklist.md`
 
 ## Open Questions
 
-- Should MVP storage use existing Mission Control database tables or a separate writing namespace?
-- Should agent calls use an existing OpenClaw session API or a narrower writing-action endpoint?
+- Should MVP storage use a single embedded database or a pluggable database layer?
+- Should agent calls use an existing external agent runtime session API or a narrower writing-action endpoint?
 - Should named versions commit automatically or only on explicit checkpoint?
 - How much diff UI is needed before range replacement becomes trustworthy?
-- Which C-3PO presence states are enough for the first usable version?
+- Which agent presence states are enough for the first usable version?
 - Where should per-project git repositories live on disk?
 
 ## Recommended First PR
