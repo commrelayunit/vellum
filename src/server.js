@@ -1,45 +1,66 @@
-const express = require('express');
+// src/server.js
 const path = require('path');
+const express = require('express');
 const bodyParser = require('body-parser');
-const db = require('./models/memory-db');
-const app = express();
-const PORT = process.env.PORT || 3002;
 
-// Middleware
+const { config } = require('./config');
+const { createConnection } = require('./db/connection');
+const { migrate } = require('./db/schema');
+const { createProjectsRepo } = require('./db/projects');
+const { createFilesRepo } = require('./db/files');
+
+const db = createConnection(config.dbPath);
+migrate(db);
+const projectsRepo = createProjectsRepo(db);
+const filesRepo = createFilesRepo(db);
+
+const app = express();
+
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes - serving static HTML files instead of EJS templates
-app.get('/', (req, res) => {
-  res.redirect('/projects');
-});
+app.get('/', (req, res) => res.redirect('/projects'));
 
 app.get('/projects', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'projects.html'));
+  const projects = projectsRepo.list().map((project) => {
+    const files = filesRepo.listByProjectId(project.id);
+    const latestUpdate = files.reduce(
+      (latest, f) => (f.updated_at > latest ? f.updated_at : latest),
+      project.updated_at
+    );
+    return {
+      ...project,
+      fileCount: files.length,
+      updatedAt: latestUpdate,
+      recentFiles: files.slice(0, 3).map((f) => f.path)
+    };
+  });
+  res.render('projects', { projects });
 });
 
-app.get('/writing', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'writing.html'));
-});
-
-// API endpoints for saving content
-app.post('/api/save-file/:fileId', (req, res) => {
-  const fileId = parseInt(req.params.fileId);
-  const { content } = req.body;
-  
-  const success = db.updateFileContent(fileId, content);
-  
-  if (success) {
-    res.json({ success: true, message: 'File saved successfully' });
-  } else {
-    res.status(404).json({ success: false, message: 'File not found' });
+app.post('/api/projects', (req, res) => {
+  const name = (req.body.name || '').trim();
+  if (!name) {
+    return res.status(400).json({ success: false, message: 'Project name is required' });
   }
+  const project = projectsRepo.create({ name, description: '' });
+  const file = filesRepo.create({
+    projectId: project.id,
+    path: 'Untitled.md',
+    title: 'Untitled',
+    content: `# ${name}\n`
+  });
+  res.status(201).json({ success: true, project, file });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Vellum server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(config.port, () => {
+    console.log(`Vellum server running on http://localhost:${config.port}`);
+  });
+}
 
 module.exports = app;
