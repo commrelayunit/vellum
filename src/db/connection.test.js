@@ -12,6 +12,7 @@ test('createConnection opens a file db and creates the parent directory', () => 
   const db = createConnection(dbPath);
   assert.equal(fs.existsSync(dbPath), true);
   db.close();
+  fs.rmSync(tmpDir, { recursive: true });
 });
 
 test('createConnection(":memory:") opens an in-memory db without touching disk', () => {

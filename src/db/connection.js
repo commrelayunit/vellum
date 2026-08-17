@@ -9,6 +9,7 @@ function createConnection(dbPath) {
     fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
   }
 
+  // Errors from fs.mkdirSync and new Database intentionally propagate (fail-fast on startup)
   const db = new Database(resolvedPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
