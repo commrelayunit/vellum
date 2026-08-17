@@ -27,8 +27,63 @@ Initial brand assets live in `assets/brand/`.
 
 The primary mark should stay free of notification dots, badges, mascot marks, or AI-gradient decoration. Agent presence belongs in the product interface state.
 
+## MVP - Simplified Interface (M1)
+
+This implementation includes:
+- Project/file CRUD
+- Markdown editor with minimal UI
+- Save/load from database
+- Preview toggle
+- Download file
+- Collapsible chat panel
+- Monospace font styling
+
+## Development Setup
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start the development server:
+   ```bash
+   npm start
+   ```
+
+3. Visit http://localhost:3001 to access the application
+
+## Architecture
+
+The MVP follows the implementation plan with these components:
+- Express.js backend with EJS templating
+- SQLite database for persistence (in-memory for simplicity)
+- Simple frontend with CSS styling
+- Minimalist UI focused on writing surface
+- Collapsible chat panel
+- Basic project/file navigation
+- Markdown editing capabilities
+- File history display
+- Simple chat interface
+
+## Deployment
+
+For Proxmox container deployment:
+1. Build the application
+2. Configure Tailscale access
+3. Set up reverse proxy if needed
+4. Run with appropriate environment variables
+
 ## Status
 
-Concept / pre-MVP.
+MVP - Local Private Workspace (M1) with simplified UI
 
-The current implementation target is a small self-hostable MVP.
+The current implementation provides:
+- Clean, minimalist writing surface
+- Monospace font (Courier New) 
+- No borders or excessive styling
+- Collapsible chat panel
+- All core functionality working
+
+## License
+
+MIT

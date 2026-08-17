@@ -1,0 +1,586 @@
+/* Vellum Minimal Writing Surface */
+:root {
+  --ink: #1F2A2E;
+  --paper: #FFFCF6;
+  /* Presence colors: identity for collaborators only (avatars, live cursor,
+     highlight). Kept out of the rest of the UI, which stays ink-on-paper. */
+  --presence-you: #2F6F64;
+  --presence-2: #C96F48;
+  --presence-3: #5B6EAE;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Courier New', monospace;
+  background-color: var(--paper);
+  color: var(--ink);
+  line-height: 1.5;
+  font-size: 14px;
+  padding: 0;
+  margin: 0;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* Header with menu button */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-title {
+  font-size: 16px;
+  font-weight: normal;
+  color: var(--ink);
+  margin: 0;
+}
+
+.menu-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-button:hover {
+  opacity: 0.6;
+}
+
+.menu-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.menu-dropdown {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.5rem;
+  min-width: 170px;
+  /* Same single canvas color as the page, just opaque so it can sit above content */
+  background-color: var(--paper);
+  padding: 0.25rem 0;
+  z-index: 200;
+}
+
+.menu-dropdown.open {
+  display: flex;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: none;
+  border: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  opacity: 0.6;
+}
+
+.menu-item .icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* Main content area with margins */
+.app-main {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 1rem;
+}
+
+/* Editor container */
+.editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  max-width: 100%;
+}
+
+.editor-header {
+  padding: 0.5rem 0;
+  font-size: 12px;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-path {
+  color: var(--ink);
+  opacity: 0.55;
+  font-size: 12px;
+}
+
+.editor-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+/* Presence: who's currently in this file */
+.presence-stack {
+  display: flex;
+  align-items: center;
+}
+
+.presence-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: bold;
+  color: #fff;
+  margin-left: -8px;
+  /* Ring in the page's own canvas color so overlapping circles stay legible */
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+.presence-avatar:first-child {
+  margin-left: 0;
+}
+
+/* Decorative live-cursor preview. Static/illustrative only: a plain
+   <textarea> can't render another user's real cursor or selection, so this
+   doesn't track anything. Real live cursors need a richer editor (M6).
+   Both pieces sit at the same fixed line offset so the flag, caret, and
+   line tint read as one unit - "this line is where they are". */
+.cursor-flag {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 10px;
+  color: var(--ink);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.cursor-flag .caret {
+  width: 2px;
+  height: 14px;
+  animation: cursor-blink 1s steps(1) infinite;
+}
+
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Weak background tint on the line a collaborator's cursor is on: a
+   translucent color wash painted over that line, same technique as a
+   text-selection highlight. pointer-events:none so it never blocks typing
+   or clicking into the textarea underneath. */
+.cursor-line-tint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 42px;
+  height: 21px;
+  pointer-events: none;
+}
+
+.editor-actions .btn {
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+}
+
+/* Icon styling - all UI actions render as inline SVGs, no text labels */
+.icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.editor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  position: relative;
+}
+
+.editor-textarea {
+  flex: 1;
+  border: none;
+  padding: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  resize: none;
+  background: none;
+  color: var(--ink);
+  line-height: 1.5;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Preview content styling */
+.preview-content {
+  flex: 1;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.preview-content h1,
+.preview-content h2,
+.preview-content h3 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--ink);
+}
+
+.preview-content p {
+  margin-bottom: 1rem;
+}
+
+.preview-content ul,
+.preview-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.preview-content li {
+  margin-bottom: 0.25rem;
+}
+
+.preview-content strong {
+  font-weight: bold;
+}
+
+.preview-content em {
+  font-style: italic;
+}
+
+/* Chat panel - collapsible sidebar */
+.chat-panel {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  font-size: 12px;
+  transition: width 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chat-header {
+  padding: 0.5rem;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-header h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.toggle-chat {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.toggle-chat:hover {
+  opacity: 0.6;
+}
+
+.toggle-chat .icon {
+  transition: transform 0.2s ease;
+}
+
+.chat-messages {
+  flex: 1;
+  padding: 0.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.message {
+  padding: 0;
+  max-width: 100%;
+}
+
+.message-author {
+  font-weight: bold;
+  margin-bottom: 0.125rem;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.message-content {
+  margin-bottom: 0.125rem;
+  font-size: 12px;
+}
+
+.message-time {
+  font-size: 10px;
+  color: var(--ink);
+  opacity: 0.5;
+}
+
+.chat-input {
+  display: flex;
+  padding: 0.5rem;
+}
+
+#chat-input {
+  flex: 1;
+  padding: 0.25rem;
+  border: none;
+  margin-right: 0.25rem;
+  background: none;
+  color: var(--ink);
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+/* Monochrome, borderless, fill-less buttons */
+.btn {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  transition: opacity 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: var(--ink);
+}
+
+.btn:hover {
+  opacity: 0.6;
+}
+
+/* Collapsed chat panel: shrink to a narrow rail, keep the toggle reachable */
+.chat-panel.collapsed {
+  width: 40px;
+}
+
+.chat-panel.collapsed .chat-header {
+  justify-content: center;
+}
+
+.chat-panel.collapsed .chat-header h3,
+.chat-panel.collapsed .chat-messages,
+.chat-panel.collapsed .chat-input {
+  display: none;
+}
+
+.chat-panel.collapsed .toggle-chat .icon {
+  transform: rotate(180deg);
+}
+
+/* Projects overview */
+.projects-page {
+  flex: 1;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem 0;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h2 {
+  font-size: 16px;
+  font-weight: normal;
+}
+
+.projects-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.project-card + .project-card {
+  margin-top: 0.5rem;
+}
+
+.project-info h3 {
+  font-size: 14px;
+  font-weight: normal;
+  margin-bottom: 0.25rem;
+}
+
+.project-description {
+  font-size: 12px;
+  opacity: 0.65;
+  margin-bottom: 0.5rem;
+}
+
+.project-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+.project-meta time::before {
+  content: "\00b7";
+  margin-right: 0.6rem;
+}
+
+.recent-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.recent-files span:not(:last-child)::after {
+  content: "\00b7";
+  margin-left: 0.4rem;
+  opacity: 0.6;
+}
+
+.project-actions .btn[aria-disabled="true"] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Inline new-project form: replaces the + button in place */
+.new-project-form {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.new-project-form input {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  padding: 0.25rem;
+  min-width: 160px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .app-main {
+    flex-direction: column;
+    padding: 0 0.5rem;
+  }
+
+  .editor-container {
+    padding: 0;
+  }
+
+  .chat-panel {
+    width: 100%;
+    height: 200px;
+  }
+
+  .chat-panel.collapsed {
+    width: 100%;
+    height: 36px;
+  }
+
+  .header-left {
+    gap: 0.25rem;
+  }
+
+  .app-title {
+    font-size: 14px;
+  }
+}

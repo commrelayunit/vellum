@@ -1,0 +1,47 @@
+<%- include('layout', { page: 'projects' }) %>
+
+<% block('body') %>
+<div class="projects-page">
+    <div class="page-header">
+        <h2>Projects</h2>
+        <button class="btn btn-primary" id="new-project-btn" aria-label="New project" title="New project">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5v14"/>
+                <path d="M5 12h14"/>
+            </svg>
+        </button>
+    </div>
+    
+    <div class="projects-list">
+        <% projects.forEach(project => { %>
+            <% const projectFiles = db.getFilesByProjectId(project.id); %>
+            <% const lastUpdated = projectFiles.reduce((latest, f) => f.updated_at > latest ? f.updated_at : latest, project.updated_at); %>
+            <div class="project-card">
+                <div class="project-info">
+                    <h3><%= project.name %></h3>
+                    <p class="project-description"><%= project.description %></p>
+                    <div class="project-meta">
+                        <span class="file-count"><%= projectFiles.length %> file<%= projectFiles.length === 1 ? '' : 's' %></span>
+                        <time data-updated="<%= new Date(lastUpdated).toISOString() %>">updated recently</time>
+                    </div>
+                    <% if (projectFiles.length) { %>
+                        <div class="recent-files">
+                            <% projectFiles.slice(0, 3).forEach(f => { %>
+                                <span><%= f.path %></span>
+                            <% }); %>
+                        </div>
+                    <% } %>
+                </div>
+                <div class="project-actions">
+                    <a href="/writing?project=<%= project.id %>" class="btn btn-secondary" aria-label="Open <%= project.name %>" title="Open">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12h14"/>
+                            <path d="M13 6l6 6-6 6"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        <% }); %>
+    </div>
+</div>
+<% endblock %>

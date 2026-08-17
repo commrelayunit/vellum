@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vellum - Writing Workspace</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/img/vellum-mark.svg" type="image/svg+xml">
+</head>
+<body data-page="<%= typeof page !== 'undefined' ? page : '' %>">
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-left">
+                <div class="menu-wrap">
+                    <button class="menu-button" id="menu-toggle" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">
+                        <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <circle cx="12" cy="5" r="1.4"/>
+                            <circle cx="12" cy="12" r="1.4"/>
+                            <circle cx="12" cy="19" r="1.4"/>
+                        </svg>
+                    </button>
+                    <div class="menu-dropdown" id="menu-dropdown" role="menu">
+                        <a href="/projects#new-project" class="menu-item" data-menu-action="new-project" role="menuitem">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 5v14"/>
+                                <path d="M5 12h14"/>
+                            </svg>
+                            <span>New project</span>
+                        </a>
+                        <a href="/projects" class="menu-item" data-menu-action="overview" role="menuitem">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 11l8-7 8 7"/>
+                                <path d="M6 10v9h12v-9"/>
+                            </svg>
+                            <span>Back to projects</span>
+                        </a>
+                    </div>
+                </div>
+                <h1 class="app-title">Vellum</h1>
+            </div>
+        </header>
+        
+        <main class="app-main">
+            <%- body %>
+        </main>
+    </div>
+    
+    <script src="/js/main.js"></script>
+</body>
+</html>
