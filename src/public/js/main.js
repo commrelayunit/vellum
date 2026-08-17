@@ -246,10 +246,8 @@ document.addEventListener('DOMContentLoaded', function() {
         el.textContent = formatRelativeTime(el.getAttribute('data-updated'));
     });
 
-    // Projects overview: New Project - creates a card for the current session.
-    // There's no backend persistence yet (the overview is static HTML), so
-    // this intentionally doesn't survive a reload - Open is disabled on the
-    // resulting card since there's no real file behind it either.
+    // Projects overview: New Project - creates the project via the API and
+    // navigates straight to its default file.
     const newProjectBtn = document.getElementById('new-project-btn');
     const projectsList = document.querySelector('.projects-list');
 
@@ -297,53 +295,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 const name = input.value.trim();
                 if (!name) return;
-                addProjectCard(name);
-                restoreButton();
+                confirmBtn.disabled = true;
+                fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        window.location.href = `/writing?project=${data.project.id}&file=${data.file.id}`;
+                    } else {
+                        confirmBtn.disabled = false;
+                        input.focus();
+                    }
+                })
+                .catch(function() {
+                    confirmBtn.disabled = false;
+                });
             });
 
             cancelBtn.addEventListener('click', restoreButton);
-        }
-
-        function addProjectCard(name) {
-            const card = document.createElement('div');
-            card.className = 'project-card';
-
-            const info = document.createElement('div');
-            info.className = 'project-info';
-
-            const title = document.createElement('h3');
-            title.textContent = name;
-
-            const description = document.createElement('p');
-            description.className = 'project-description';
-            description.textContent = 'New project - not saved between sessions yet';
-
-            const meta = document.createElement('div');
-            meta.className = 'project-meta';
-            const fileCount = document.createElement('span');
-            fileCount.className = 'file-count';
-            fileCount.textContent = '0 files';
-            const updated = document.createElement('time');
-            updated.textContent = 'updated just now';
-            meta.appendChild(fileCount);
-            meta.appendChild(updated);
-
-            info.appendChild(title);
-            info.appendChild(description);
-            info.appendChild(meta);
-
-            const actions = document.createElement('div');
-            actions.className = 'project-actions';
-            const openBtn = document.createElement('span');
-            openBtn.className = 'btn';
-            openBtn.setAttribute('aria-disabled', 'true');
-            openBtn.title = 'Open (not available yet - no file exists for this project)';
-            openBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>';
-            actions.appendChild(openBtn);
-
-            card.appendChild(info);
-            card.appendChild(actions);
-            projectsList.prepend(card);
         }
 
         newProjectBtn.addEventListener('click', openNewProjectForm);

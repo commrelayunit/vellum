@@ -57,6 +57,32 @@ app.post('/api/projects', (req, res) => {
   res.status(201).json({ success: true, project, file });
 });
 
+app.get('/writing', (req, res) => {
+  const projectId = parseInt(req.query.project, 10);
+  const project = projectsRepo.getById(projectId);
+  if (!project) {
+    return res.status(404).send('Project not found');
+  }
+  const file = req.query.file
+    ? filesRepo.getById(parseInt(req.query.file, 10))
+    : filesRepo.getFirstForProject(project.id);
+  if (!file) {
+    return res.status(404).send('No file to open for this project');
+  }
+  res.render('writing', { project, file });
+});
+
+app.post('/api/save-file/:fileId', (req, res) => {
+  const fileId = parseInt(req.params.fileId, 10);
+  const { content } = req.body;
+  const success = filesRepo.updateContent(fileId, content);
+  if (success) {
+    res.json({ success: true, message: 'File saved successfully' });
+  } else {
+    res.status(404).json({ success: false, message: 'File not found' });
+  }
+});
+
 if (require.main === module) {
   app.listen(config.port, () => {
     console.log(`Vellum server running on http://localhost:${config.port}`);
