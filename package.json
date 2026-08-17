@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node src/scripts/seed.js"
+    "seed": "node src/scripts/seed.js",
+    "test": "node --test src"
   },
   "keywords": [
     "writing",
@@ -18,10 +19,10 @@
   "author": "Vellum Team",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
+    "better-sqlite3": "^13.0.3",
+    "body-parser": "^1.20.2",
     "ejs": "^3.1.9",
-    "sqlite3": "^5.1.6",
-    "body-parser": "^1.20.2"
+    "express": "^4.18.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
