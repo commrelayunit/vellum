@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vellum - Writing Workspace</title>
+    <title><%= title %> - Vellum</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="icon" href="/img/vellum-mark.svg" type="image/svg+xml">
 </head>
-<body data-page="<%= typeof page !== 'undefined' ? page : '' %>">
+<body data-page="<%= page %>">
     <div class="app-container">
         <header class="app-header">
             <div class="header-left">
@@ -39,12 +39,5 @@
                 <h1 class="app-title">Vellum</h1>
             </div>
         </header>
-        
+
         <main class="app-main">
-            <%- body %>
-        </main>
-    </div>
-    
-    <script src="/js/main.js"></script>
-</body>
-</html>

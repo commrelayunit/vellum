@@ -1,6 +1,5 @@
-<%- include('layout', { page: 'writing' }) %>
+<%- include('partials/header', { title: file.title || file.path, page: 'writing' }) %>
 
-<% block('body') %>
 <div class="editor-container">
     <div class="editor-header">
         <div class="file-path"><%= project.name %> / <%= file.path %></div>
@@ -26,9 +25,7 @@
 
     <div class="editor-content">
         <div class="cursor-line-tint" id="cursor-line-tint"></div>
-        <textarea id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>">
-<%= file.content %>
-        </textarea>
+        <textarea id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>"><%= file.content %></textarea>
         <div class="cursor-flag" id="cursor-demo" aria-hidden="true"></div>
     </div>
 </div>
@@ -64,4 +61,5 @@
         </button>
     </div>
 </div>
-<% endblock %>
+
+<%- include('partials/footer') %>
