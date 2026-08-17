@@ -2,12 +2,14 @@
 const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
+const session = require('express-session');
 
 const { config } = require('./config');
 const { createConnection } = require('./db/connection');
 const { migrate } = require('./db/schema');
 const { createProjectsRepo } = require('./db/projects');
 const { createFilesRepo } = require('./db/files');
+const { requireAuth, verifyPassword } = require('./auth/middleware');
 
 const db = createConnection(config.dbPath);
 migrate(db);
@@ -23,9 +25,33 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.use(session({
+  secret: config.sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, sameSite: 'strict' }
+}));
+
+app.get('/login', (req, res) => {
+  res.render('login', { error: null });
+});
+
+app.post('/login', (req, res) => {
+  const { password } = req.body;
+  if (verifyPassword(password, config.authPasswordHash)) {
+    req.session.authenticated = true;
+    return res.redirect('/projects');
+  }
+  res.status(401).render('login', { error: 'Wrong password' });
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy(() => res.redirect('/login'));
+});
+
 app.get('/', (req, res) => res.redirect('/projects'));
 
-app.get('/projects', (req, res) => {
+app.get('/projects', requireAuth, (req, res) => {
   const projects = projectsRepo.list().map((project) => {
     const files = filesRepo.listByProjectId(project.id);
     const latestUpdate = files.reduce(
@@ -42,7 +68,7 @@ app.get('/projects', (req, res) => {
   res.render('projects', { projects });
 });
 
-app.post('/api/projects', (req, res) => {
+app.post('/api/projects', requireAuth, (req, res) => {
   const name = (req.body.name || '').trim();
   if (!name) {
     return res.status(400).json({ success: false, message: 'Project name is required' });
@@ -57,7 +83,7 @@ app.post('/api/projects', (req, res) => {
   res.status(201).json({ success: true, project, file });
 });
 
-app.get('/writing', (req, res) => {
+app.get('/writing', requireAuth, (req, res) => {
   const projectId = parseInt(req.query.project, 10);
   const project = projectsRepo.getById(projectId);
   if (!project) {
@@ -72,7 +98,7 @@ app.get('/writing', (req, res) => {
   res.render('writing', { project, file });
 });
 
-app.post('/api/save-file/:fileId', (req, res) => {
+app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
   const fileId = parseInt(req.params.fileId, 10);
   const { content } = req.body;
   const success = filesRepo.updateContent(fileId, content);

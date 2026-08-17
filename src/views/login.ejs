@@ -1,0 +1,25 @@
+<!-- src/views/login.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in - Vellum</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/img/vellum-mark.svg" type="image/svg+xml">
+</head>
+<body data-page="login">
+    <div class="app-container">
+        <main class="app-main login-main">
+            <form class="login-form" method="POST" action="/login">
+                <h1 class="app-title">vellum</h1>
+                <input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus>
+                <% if (error) { %>
+                    <p class="login-error"><%= error %></p>
+                <% } %>
+                <button type="submit" class="btn btn-primary">Sign in</button>
+            </form>
+        </main>
+    </div>
+</body>
+</html>
