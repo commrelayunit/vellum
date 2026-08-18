@@ -124,6 +124,12 @@ From another machine on your Tailnet: open `http://<vellum-tailscale-ip>:3001/lo
 
 See `deploy/backup.sh` for a nightly SQLite backup script, and set up a Proxmox `vzdump` backup job for the whole container (Datacenter → Backup) as the primary safety net — that captures the full container including `/var/lib/vellum/data`.
 
+Install a nightly cron job on the LXC (as root):
+
+```bash
+echo "0 3 * * * vellum DB_PATH=/var/lib/vellum/data/vellum.db BACKUP_DIR=/var/backups/vellum /opt/vellum/deploy/backup.sh" > /etc/cron.d/vellum-backup
+```
+
 ## 11. Upgrading
 
 ```bash
