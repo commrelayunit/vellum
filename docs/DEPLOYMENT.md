@@ -32,11 +32,13 @@ pct enter 100
 apt update && apt upgrade -y
 apt install -y curl git build-essential python3 sqlite3
 
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 apt install -y nodejs
 
-node -v   # expect v20.x
+node -v   # expect v22.x
 ```
+
+Node 22.x LTS is required here (not just "Node >= 20"): `better-sqlite3@12.11.1` only ships prebuilt binaries for Node ABI 127/137/141/147 (Node 22/24/25/26), not for Node 20's ABI 115. Installing Node 20 would force `npm ci` to fall back to a full `node-gyp` source compile on this 512MB container, which is exactly what the prebuilt-binary constraint is meant to avoid.
 
 `build-essential`/`python3` are there as a fallback in case `better-sqlite3` has no prebuilt binary for this exact Node/Debian combination — if the prebuilt binary works, npm skips the compile step automatically.
 
@@ -79,6 +81,8 @@ DB_PATH=/var/lib/vellum/data/vellum.db
 SESSION_SECRET=<paste output of: openssl rand -hex 32>
 AUTH_PASSWORD_HASH=<paste output of: node src/scripts/hash-password.js "your chosen password", run from /opt/vellum>
 ```
+
+`NODE_ENV=production` is already set by the systemd unit (`deploy/vellum.service`) and does not need to be added here — it disables Express's dev-mode error pages (which would otherwise leak stack traces in HTTP responses) and enables view caching.
 
 Generate the two secrets from inside `/opt/vellum` (as the `vellum` user, so file ownership stays correct):
 
@@ -123,6 +127,12 @@ From another machine on your Tailnet: open `http://<vellum-tailscale-ip>:3001/lo
 ## 10. Backups
 
 See `deploy/backup.sh` for a nightly SQLite backup script, and set up a Proxmox `vzdump` backup job for the whole container (Datacenter → Backup) as the primary safety net — that captures the full container including `/var/lib/vellum/data`.
+
+Create the backup directory first — `/var/backups` is root-owned `0755` by default on Debian, so the `vellum` user cannot create a subdirectory there on its own, and `backup.sh` (which runs with `set -e`) will fail silently under cron otherwise:
+
+```bash
+mkdir -p /var/backups/vellum && chown vellum:vellum /var/backups/vellum
+```
 
 Install a nightly cron job on the LXC (as root):
 
