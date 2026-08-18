@@ -67,11 +67,7 @@ The MVP follows the implementation plan with these components:
 
 ## Deployment
 
-For Proxmox container deployment:
-1. Build the application
-2. Configure Tailscale access
-3. Set up reverse proxy if needed
-4. Run with appropriate environment variables
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full Proxmox LXC setup (container creation, Tailscale, systemd service, backups, upgrades).
 
 ## Status
 
