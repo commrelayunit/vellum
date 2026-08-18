@@ -1,0 +1,8 @@
+.git
+.worktrees
+node_modules
+data
+.env
+*.log
+npm-debug.log
+docs/superpowers
