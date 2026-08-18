@@ -377,8 +377,10 @@ document.addEventListener('DOMContentLoaded', function() {
         { pattern: /anthropic|claude/i, slug: 'anthropic' },
         { pattern: /google|gemini/i, slug: 'googlegemini' },
         { pattern: /mistral/i, slug: 'mistralai' },
-        { pattern: /meta|llama/i, slug: 'meta' },
-        { pattern: /ollama/i, slug: 'ollama' }
+        // ollama must be checked before meta|llama - "ollama" contains the
+        // substring "llama", so the meta pattern would otherwise always win.
+        { pattern: /ollama/i, slug: 'ollama' },
+        { pattern: /meta|llama/i, slug: 'meta' }
     ];
 
     const AVATAR_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
@@ -392,36 +394,57 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initialsFor(label) {
-        const words = label.trim().split(/\s+/).filter(Boolean);
+        // Punctuation-only "words" (e.g. a spaced en-dash in "OpenClaw – home")
+        // shouldn't count as a word on their own, and shouldn't contribute a
+        // non-alphanumeric character to the initials.
+        const words = label.trim().split(/\s+/).filter(function(w) { return /[a-z0-9]/i.test(w); });
         if (words.length === 0) return '?';
-        if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-        return (words[0][0] + words[1][0]).toUpperCase();
+        if (words.length === 1) {
+            const alnum = words[0].replace(/[^a-z0-9]/gi, '');
+            return (alnum.slice(0, 2) || '?').toUpperCase();
+        }
+        const firstChar = words[0].match(/[a-z0-9]/i)[0];
+        const secondChar = words[1].match(/[a-z0-9]/i)[0];
+        return (firstChar + secondChar).toUpperCase();
+    }
+
+    function renderInitialsFallback(target, label) {
+        const color = AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
+        target.style.backgroundColor = color;
+        target.textContent = initialsFor(label);
     }
 
     function resolveProviderAvatar(target) {
         const customUrl = target.dataset.avatarUrl;
         const label = target.dataset.label || '';
 
-        if (customUrl) {
+        function withImageFallback(src) {
             const img = document.createElement('img');
-            img.src = customUrl;
+            img.src = src;
             img.alt = label;
+            img.onerror = function() {
+                // The image (custom URL, or cdn.simpleicons.org - which may be
+                // unreachable from a self-hosted/Tailscale-only deployment)
+                // failed to load. Drop it and fall back to initials+color
+                // instead of leaving a blank circle.
+                img.remove();
+                renderInitialsFallback(target, label);
+            };
             target.appendChild(img);
+        }
+
+        if (customUrl) {
+            withImageFallback(customUrl);
             return;
         }
 
         const known = KNOWN_PROVIDER_ICONS.find(function(entry) { return entry.pattern.test(label); });
         if (known) {
-            const img = document.createElement('img');
-            img.src = `https://cdn.simpleicons.org/${known.slug}`;
-            img.alt = label;
-            target.appendChild(img);
+            withImageFallback(`https://cdn.simpleicons.org/${known.slug}`);
             return;
         }
 
-        const color = AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
-        target.style.backgroundColor = color;
-        target.textContent = initialsFor(label);
+        renderInitialsFallback(target, label);
     }
 
     document.querySelectorAll('[data-avatar-target]').forEach(resolveProviderAvatar);
@@ -439,27 +462,34 @@ document.addEventListener('DOMContentLoaded', function() {
             labelInput.type = 'text';
             labelInput.placeholder = 'Label (e.g. "Claude direct")';
             labelInput.required = true;
+            labelInput.autocomplete = 'off';
             labelInput.value = existing ? existing.label : '';
 
             const baseUrlInput = document.createElement('input');
             baseUrlInput.type = 'text';
             baseUrlInput.placeholder = 'Base URL (e.g. https://api.anthropic.com/v1)';
             baseUrlInput.required = true;
+            baseUrlInput.autocomplete = 'off';
             baseUrlInput.value = existing ? existing.baseUrl : '';
 
             const apiKeyInput = document.createElement('input');
             apiKeyInput.type = 'password';
             apiKeyInput.placeholder = existing ? 'New API key (leave blank to keep current)' : 'API key';
             apiKeyInput.required = !existing;
+            // 'new-password' tells the browser this is a credential field
+            // without inviting it to autofill a previously-saved password.
+            apiKeyInput.autocomplete = 'new-password';
 
             const defaultModelInput = document.createElement('input');
             defaultModelInput.type = 'text';
             defaultModelInput.placeholder = 'Default model (optional)';
+            defaultModelInput.autocomplete = 'off';
             defaultModelInput.value = existing ? existing.defaultModel : '';
 
             const avatarUrlInput = document.createElement('input');
             avatarUrlInput.type = 'text';
             avatarUrlInput.placeholder = 'Avatar image URL (optional)';
+            avatarUrlInput.autocomplete = 'off';
             avatarUrlInput.value = existing ? existing.avatarUrl : '';
 
             const confirmBtn = document.createElement('button');
@@ -481,15 +511,31 @@ document.addEventListener('DOMContentLoaded', function() {
             actions.appendChild(confirmBtn);
             actions.appendChild(cancelBtn);
 
+            const errorEl = document.createElement('p');
+            errorEl.className = 'provider-form-error';
+            errorEl.hidden = true;
+
+            function showFormError(message) {
+                errorEl.textContent = message;
+                errorEl.hidden = false;
+            }
+
+            function clearFormError() {
+                errorEl.hidden = true;
+                errorEl.textContent = '';
+            }
+
             form.appendChild(labelInput);
             form.appendChild(baseUrlInput);
             form.appendChild(apiKeyInput);
             form.appendChild(defaultModelInput);
             form.appendChild(avatarUrlInput);
             form.appendChild(actions);
+            form.appendChild(errorEl);
 
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
+                clearFormError();
                 confirmBtn.disabled = true;
                 const payload = {
                     label: labelInput.value.trim(),
@@ -510,10 +556,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.location.reload();
                     } else {
                         confirmBtn.disabled = false;
+                        showFormError(data.message || 'Something went wrong.');
                     }
                 })
                 .catch(function() {
                     confirmBtn.disabled = false;
+                    showFormError('Could not reach the server — check your connection and try again.');
                 });
             });
 
@@ -558,7 +606,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (deleteBtn) {
+                if (!window.confirm('Delete this provider? This cannot be undone.')) return;
+
                 const card = deleteBtn.closest('.provider-card');
+                const info = card.querySelector('.project-info');
+
+                function showDeleteError(message) {
+                    if (!info) return;
+                    let errorEl = info.querySelector('.provider-form-error');
+                    if (!errorEl) {
+                        errorEl = document.createElement('p');
+                        errorEl.className = 'provider-form-error';
+                        info.appendChild(errorEl);
+                    }
+                    errorEl.textContent = message;
+                    errorEl.hidden = false;
+                }
+
+                if (info) {
+                    const existingError = info.querySelector('.provider-form-error');
+                    if (existingError) existingError.remove();
+                }
+
                 deleteBtn.disabled = true;
                 fetch(`/api/providers/${card.dataset.providerId}/delete`, { method: 'POST' })
                     .then(function(response) { return response.json(); })
@@ -567,10 +636,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             card.remove();
                         } else {
                             deleteBtn.disabled = false;
+                            showDeleteError(data.message || 'Something went wrong.');
                         }
                     })
                     .catch(function() {
                         deleteBtn.disabled = false;
+                        showDeleteError('Could not reach the server — check your connection and try again.');
                     });
             }
         });

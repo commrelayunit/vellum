@@ -685,3 +685,10 @@ body {
   gap: 0.25rem;
   margin-top: 0.25rem;
 }
+
+.provider-form-error {
+  font-size: 11px;
+  color: var(--ink);
+  opacity: 0.65;
+  margin-top: 0.35rem;
+}
