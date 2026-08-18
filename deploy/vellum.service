@@ -1,0 +1,19 @@
+[Unit]
+Description=Vellum writing workspace
+After=network.target
+
+[Service]
+Type=simple
+User=vellum
+Group=vellum
+WorkingDirectory=/opt/vellum
+EnvironmentFile=/etc/vellum/vellum.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vellum
+
+[Install]
+WantedBy=multi-user.target
