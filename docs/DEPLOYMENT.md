@@ -80,15 +80,17 @@ PORT=3001
 DB_PATH=/var/lib/vellum/data/vellum.db
 SESSION_SECRET=<paste output of: openssl rand -hex 32>
 AUTH_PASSWORD_HASH=<paste output of: node src/scripts/hash-password.js "your chosen password", run from /opt/vellum>
+ENCRYPTION_KEY=<paste output of: openssl rand -base64 32>
 ```
 
 `NODE_ENV=production` is already set by the systemd unit (`deploy/vellum.service`) and does not need to be added here — it disables Express's dev-mode error pages (which would otherwise leak stack traces in HTTP responses) and enables view caching.
 
-Generate the two secrets from inside `/opt/vellum` (as the `vellum` user, so file ownership stays correct):
+Generate the three secrets from inside `/opt/vellum` (as the `vellum` user, so file ownership stays correct):
 
 ```bash
 su - vellum -s /bin/bash -c "cd /opt/vellum && openssl rand -hex 32"
 su - vellum -s /bin/bash -c "cd /opt/vellum && node src/scripts/hash-password.js 'your chosen password'"
+su - vellum -s /bin/bash -c "cd /opt/vellum && openssl rand -base64 32"
 ```
 
 Lock the env file down since it holds secrets:

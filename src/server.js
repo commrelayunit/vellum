@@ -9,12 +9,16 @@ const { createConnection } = require('./db/connection');
 const { migrate } = require('./db/schema');
 const { createProjectsRepo } = require('./db/projects');
 const { createFilesRepo } = require('./db/files');
+const { createSecretsService } = require('./crypto/secrets');
+const { createProvidersRepo } = require('./db/providers');
 const { requireAuth, verifyPassword } = require('./auth/middleware');
 
 const db = createConnection(config.dbPath);
 migrate(db);
 const projectsRepo = createProjectsRepo(db);
 const filesRepo = createFilesRepo(db);
+const secrets = createSecretsService(config.encryptionKey);
+const providersRepo = createProvidersRepo(db, secrets);
 
 const app = express();
 
@@ -118,6 +122,32 @@ app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
   }
 });
 
+app.get('/settings', requireAuth, (req, res) => {
+  const providers = providersRepo.list();
+  res.render('settings', { providers });
+});
+
+app.post('/api/providers', requireAuth, (req, res) => {
+  const { label, baseUrl, apiKey, defaultModel, avatarUrl } = req.body;
+  if (typeof label !== 'string' || !label.trim()) {
+    return res.status(400).json({ success: false, message: 'Label is required' });
+  }
+  if (typeof baseUrl !== 'string' || !baseUrl.trim()) {
+    return res.status(400).json({ success: false, message: 'Base URL is required' });
+  }
+  if (typeof apiKey !== 'string' || !apiKey.trim()) {
+    return res.status(400).json({ success: false, message: 'API key is required' });
+  }
+  const provider = providersRepo.create({
+    label: label.trim(),
+    baseUrl: baseUrl.trim(),
+    apiKey: apiKey.trim(),
+    defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
+    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null
+  });
+  res.status(201).json({ success: true, provider });
+});
+
 if (process.env.NODE_ENV === 'production') {
   if (!config.authPasswordHash) {
     console.warn(
@@ -130,6 +160,13 @@ if (process.env.NODE_ENV === 'production') {
     console.warn(
       'WARNING: SESSION_SECRET is using the insecure development default. ' +
       'Set SESSION_SECRET to a random value (e.g. `openssl rand -hex 32`) in your .env / ' +
+      'systemd EnvironmentFile.'
+    );
+  }
+  if (!config.encryptionKey) {
+    console.warn(
+      'WARNING: ENCRYPTION_KEY is not set. Saving an AI provider will fail. ' +
+      'Generate one with `openssl rand -base64 32` and set ENCRYPTION_KEY in your .env / ' +
       'systemd EnvironmentFile.'
     );
   }

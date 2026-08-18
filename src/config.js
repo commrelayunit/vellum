@@ -7,7 +7,8 @@ function loadConfig(env = process.env) {
     port: parseInt(env.PORT, 10) || 3001,
     dbPath: env.DB_PATH || path.join(__dirname, '..', 'data', 'vellum.db'),
     sessionSecret: env.SESSION_SECRET || 'dev-secret-change-me',
-    authPasswordHash: env.AUTH_PASSWORD_HASH || null
+    authPasswordHash: env.AUTH_PASSWORD_HASH || null,
+    encryptionKey: env.ENCRYPTION_KEY || null
   };
 }
 

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 process.env.DB_PATH = ':memory:';
 process.env.SESSION_SECRET = 'test-secret';
 process.env.AUTH_PASSWORD_HASH = require('./scripts/hash-password').hashPassword('testpass');
+process.env.ENCRYPTION_KEY = require('crypto').randomBytes(32).toString('base64');
 
 const app = require('./server');
 
@@ -162,5 +163,59 @@ test('login with the wrong password is rejected', async () => {
     body: 'password=wrong'
   });
   assert.equal(res.status, 401);
+  server.close();
+});
+
+test('unauthenticated GET /settings redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/settings`, { redirect: 'manual' });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), '/login');
+  server.close();
+});
+
+test('GET /settings renders the (empty) provider list', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/settings`, { headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /Settings/);
+  server.close();
+});
+
+test('POST /api/providers creates a provider and masks the key in the response', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'OpenClaw', baseUrl: 'http://localhost:18789/v1', apiKey: 'secret-token-9999' })
+  });
+  assert.equal(res.status, 201);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.equal(data.provider.label, 'OpenClaw');
+  assert.equal(data.provider.maskedKey, '•••• 9999');
+  assert.equal(JSON.stringify(data).includes('secret-token-9999'), false);
+  server.close();
+});
+
+test('POST /api/providers rejects a missing label, base URL, or API key', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: '', baseUrl: '', apiKey: '' })
+  });
+  assert.equal(res.status, 400);
   server.close();
 });
