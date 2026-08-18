@@ -142,6 +142,8 @@ Install a nightly cron job on the LXC (as root):
 echo "0 3 * * * vellum DB_PATH=/var/lib/vellum/data/vellum.db BACKUP_DIR=/var/backups/vellum /opt/vellum/deploy/backup.sh" > /etc/cron.d/vellum-backup
 ```
 
+**The nightly `backup.sh` script backs up the SQLite database only — that is not enough to recover AI provider credentials.** Provider API keys are stored encrypted with `ENCRYPTION_KEY` (from `/etc/vellum/vellum.env`); restoring a DB-only backup onto a host with a different or missing `ENCRYPTION_KEY` leaves every stored provider row un-decryptable (the settings page will list them but can't reveal or reuse the keys). Back up `/etc/vellum/vellum.env` alongside the database — the Proxmox `vzdump` container-level backup already covers this since it captures the whole container, so make sure that job is actually enabled if you're relying on it as your recovery path for this feature's data.
+
 ## 11. Upgrading
 
 ```bash
@@ -150,3 +152,5 @@ systemctl restart vellum
 ```
 
 The database lives in `/var/lib/vellum/data`, outside `/opt/vellum`, so `git pull` never touches it.
+
+**Existing installs upgrading past the AI provider settings feature must add `ENCRYPTION_KEY` to `/etc/vellum/vellum.env` before the Settings page will work.** Without it, the page still appears in the menu but every save fails (see the `## 6. Configure` section above for the generation command: `openssl rand -base64 32`), and the only in-app signal is a warning in `journalctl -u vellum` that's easy to miss.

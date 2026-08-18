@@ -55,17 +55,22 @@ This implementation includes:
    npm run hash-password -- "your chosen password"
    ```
 
-4. Create and seed the SQLite database:
+4. Generate an encryption key for AI provider API keys and set it as `ENCRYPTION_KEY` in `.env` (it ships empty in `.env.example` — without it, saving a provider on the Settings page will fail):
+   ```bash
+   openssl rand -base64 32
+   ```
+
+5. Create and seed the SQLite database:
    ```bash
    npm run seed
    ```
 
-5. Start the development server:
+6. Start the development server:
    ```bash
    npm start
    ```
 
-6. Visit http://localhost:3001, sign in with the password you hashed in step 3, and access the application.
+7. Visit http://localhost:3001, sign in with the password you hashed in step 3, and access the application.
 
 ## Architecture
 
