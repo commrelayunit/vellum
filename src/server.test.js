@@ -297,3 +297,43 @@ test('POST /api/providers/:id/delete 404s for an unknown id', async () => {
   assert.equal(res.status, 404);
   server.close();
 });
+
+test('unauthenticated POST /api/providers redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label: 'x', baseUrl: 'http://x', apiKey: 'x' }),
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), '/login');
+  server.close();
+});
+
+test('unauthenticated POST /api/providers/:id redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/providers/1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label: 'x', baseUrl: 'http://x', apiKey: '' }),
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), '/login');
+  server.close();
+});
+
+test('unauthenticated POST /api/providers/:id/delete redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/providers/1/delete`, {
+    method: 'POST',
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), '/login');
+  server.close();
+});

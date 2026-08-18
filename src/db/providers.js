@@ -1,16 +1,30 @@
 // src/db/providers.js
+const UNREADABLE_KEY_LABEL = '•••• (unreadable)';
+
 function maskKey(plaintext) {
+  if (plaintext.length <= 4) {
+    return '•'.repeat(Math.max(plaintext.length, 4));
+  }
   const last4 = plaintext.slice(-4);
   return `•••• ${last4}`;
 }
 
 function toViewModel(row, secrets) {
-  const plaintext = secrets.decrypt(row.api_key_encrypted);
+  let maskedKey;
+  try {
+    maskedKey = maskKey(secrets.decrypt(row.api_key_encrypted));
+  } catch {
+    // The row was encrypted under a different/stale ENCRYPTION_KEY (e.g. a
+    // DB-only backup restored onto a host with a different env file). Don't
+    // let one un-decryptable row 500 the whole settings page - list it with
+    // a placeholder so it can still be found and deleted.
+    maskedKey = UNREADABLE_KEY_LABEL;
+  }
   return {
     id: row.id,
     label: row.label,
     baseUrl: row.base_url,
-    maskedKey: maskKey(plaintext),
+    maskedKey,
     defaultModel: row.default_model,
     avatarUrl: row.avatar_url,
     createdAt: row.created_at,
