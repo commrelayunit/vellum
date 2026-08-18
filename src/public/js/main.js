@@ -368,4 +368,211 @@ document.addEventListener('DOMContentLoaded', function() {
         cursorFlag.appendChild(caret);
         cursorFlag.appendChild(label);
     }
+
+    // Settings page: resolve each provider's avatar (custom URL > known-brand
+    // icon via Simple Icons > initials+color fallback, same visual pattern as
+    // the collaborator presence avatars).
+    const KNOWN_PROVIDER_ICONS = [
+        { pattern: /openai|gpt/i, slug: 'openai' },
+        { pattern: /anthropic|claude/i, slug: 'anthropic' },
+        { pattern: /google|gemini/i, slug: 'googlegemini' },
+        { pattern: /mistral/i, slug: 'mistralai' },
+        { pattern: /meta|llama/i, slug: 'meta' },
+        { pattern: /ollama/i, slug: 'ollama' }
+    ];
+
+    const AVATAR_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
+
+    function hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = (hash * 31 + str.charCodeAt(i)) | 0;
+        }
+        return Math.abs(hash);
+    }
+
+    function initialsFor(label) {
+        const words = label.trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) return '?';
+        if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+        return (words[0][0] + words[1][0]).toUpperCase();
+    }
+
+    function resolveProviderAvatar(target) {
+        const customUrl = target.dataset.avatarUrl;
+        const label = target.dataset.label || '';
+
+        if (customUrl) {
+            const img = document.createElement('img');
+            img.src = customUrl;
+            img.alt = label;
+            target.appendChild(img);
+            return;
+        }
+
+        const known = KNOWN_PROVIDER_ICONS.find(function(entry) { return entry.pattern.test(label); });
+        if (known) {
+            const img = document.createElement('img');
+            img.src = `https://cdn.simpleicons.org/${known.slug}`;
+            img.alt = label;
+            target.appendChild(img);
+            return;
+        }
+
+        const color = AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
+        target.style.backgroundColor = color;
+        target.textContent = initialsFor(label);
+    }
+
+    document.querySelectorAll('[data-avatar-target]').forEach(resolveProviderAvatar);
+
+    // Settings page: add/edit/delete provider forms
+    const providersList = document.getElementById('providers-list');
+    const newProviderBtn = document.getElementById('new-provider-btn');
+
+    if (providersList && newProviderBtn) {
+        function buildProviderForm(existing) {
+            const form = document.createElement('form');
+            form.className = 'provider-form';
+
+            const labelInput = document.createElement('input');
+            labelInput.type = 'text';
+            labelInput.placeholder = 'Label (e.g. "Claude direct")';
+            labelInput.required = true;
+            labelInput.value = existing ? existing.label : '';
+
+            const baseUrlInput = document.createElement('input');
+            baseUrlInput.type = 'text';
+            baseUrlInput.placeholder = 'Base URL (e.g. https://api.anthropic.com/v1)';
+            baseUrlInput.required = true;
+            baseUrlInput.value = existing ? existing.baseUrl : '';
+
+            const apiKeyInput = document.createElement('input');
+            apiKeyInput.type = 'password';
+            apiKeyInput.placeholder = existing ? 'New API key (leave blank to keep current)' : 'API key';
+            apiKeyInput.required = !existing;
+
+            const defaultModelInput = document.createElement('input');
+            defaultModelInput.type = 'text';
+            defaultModelInput.placeholder = 'Default model (optional)';
+            defaultModelInput.value = existing ? existing.defaultModel : '';
+
+            const avatarUrlInput = document.createElement('input');
+            avatarUrlInput.type = 'text';
+            avatarUrlInput.placeholder = 'Avatar image URL (optional)';
+            avatarUrlInput.value = existing ? existing.avatarUrl : '';
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'submit';
+            confirmBtn.className = 'btn';
+            confirmBtn.setAttribute('aria-label', existing ? 'Save provider' : 'Create provider');
+            confirmBtn.title = existing ? 'Save' : 'Create';
+            confirmBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'btn';
+            cancelBtn.setAttribute('aria-label', 'Cancel');
+            cancelBtn.title = 'Cancel';
+            cancelBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>';
+
+            const actions = document.createElement('div');
+            actions.className = 'provider-form-actions';
+            actions.appendChild(confirmBtn);
+            actions.appendChild(cancelBtn);
+
+            form.appendChild(labelInput);
+            form.appendChild(baseUrlInput);
+            form.appendChild(apiKeyInput);
+            form.appendChild(defaultModelInput);
+            form.appendChild(avatarUrlInput);
+            form.appendChild(actions);
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                confirmBtn.disabled = true;
+                const payload = {
+                    label: labelInput.value.trim(),
+                    baseUrl: baseUrlInput.value.trim(),
+                    apiKey: apiKeyInput.value.trim(),
+                    defaultModel: defaultModelInput.value.trim(),
+                    avatarUrl: avatarUrlInput.value.trim()
+                };
+                const url = existing ? `/api/providers/${existing.id}` : '/api/providers';
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        confirmBtn.disabled = false;
+                    }
+                })
+                .catch(function() {
+                    confirmBtn.disabled = false;
+                });
+            });
+
+            return { form, cancelBtn };
+        }
+
+        newProviderBtn.addEventListener('click', function() {
+            if (document.querySelector('.provider-form')) return;
+            newProviderBtn.disabled = true;
+            const { form, cancelBtn } = buildProviderForm(null);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'provider-card';
+            wrapper.appendChild(form);
+            providersList.insertBefore(wrapper, providersList.firstChild);
+            cancelBtn.addEventListener('click', function() {
+                wrapper.remove();
+                newProviderBtn.disabled = false;
+            });
+            form.querySelector('input').focus();
+        });
+
+        providersList.addEventListener('click', function(e) {
+            const editBtn = e.target.closest('.provider-edit-btn');
+            const deleteBtn = e.target.closest('.provider-delete-btn');
+
+            if (editBtn) {
+                const card = editBtn.closest('.provider-card');
+                if (card.querySelector('.provider-form')) return;
+                const existing = {
+                    id: card.dataset.providerId,
+                    label: card.dataset.label,
+                    baseUrl: card.dataset.baseUrl,
+                    defaultModel: card.dataset.defaultModel,
+                    avatarUrl: card.dataset.avatarUrl
+                };
+                const info = card.querySelector('.project-info');
+                const { form, cancelBtn } = buildProviderForm(existing);
+                info.replaceWith(form);
+                cancelBtn.addEventListener('click', function() {
+                    form.replaceWith(info);
+                });
+            }
+
+            if (deleteBtn) {
+                const card = deleteBtn.closest('.provider-card');
+                deleteBtn.disabled = true;
+                fetch(`/api/providers/${card.dataset.providerId}/delete`, { method: 'POST' })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            card.remove();
+                        } else {
+                            deleteBtn.disabled = false;
+                        }
+                    })
+                    .catch(function() {
+                        deleteBtn.disabled = false;
+                    });
+            }
+        });
+    }
 });
