@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', function() {
             overviewItem.style.display = 'none';
         }
 
+        const settingsItem = menuDropdown.querySelector('[data-menu-action="settings"]');
+        if (settingsItem && document.body.dataset.page === 'settings') {
+            // Already on settings - no point linking back to it
+            settingsItem.style.display = 'none';
+        }
+
         function closeMenu() {
             menuDropdown.classList.remove('open');
             menuToggle.setAttribute('aria-expanded', 'false');

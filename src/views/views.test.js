@@ -28,3 +28,21 @@ test('writing.ejs renders file content with no stray whitespace', async () => {
   });
   assert.match(html, /<textarea[^>]*>#\sHello<\/textarea>/);
 });
+
+test('settings.ejs renders a provider card with masked key and no plaintext', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'settings.ejs'), {
+    providers: [
+      {
+        id: 1,
+        label: 'OpenClaw – home',
+        baseUrl: 'http://localhost:18789/v1',
+        maskedKey: '•••• 9999',
+        defaultModel: 'claude-sonnet-4-5',
+        avatarUrl: null
+      }
+    ]
+  });
+  assert.match(html, /OpenClaw – home/);
+  assert.match(html, /•••• 9999/);
+  assert.doesNotMatch(html, /block\(/);
+});
