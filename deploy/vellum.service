@@ -7,6 +7,7 @@ Type=simple
 User=vellum
 Group=vellum
 WorkingDirectory=/opt/vellum
+Environment=NODE_ENV=production
 EnvironmentFile=/etc/vellum/vellum.env
 ExecStart=/usr/bin/node src/server.js
 Restart=on-failure

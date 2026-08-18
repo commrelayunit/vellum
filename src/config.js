@@ -1,6 +1,6 @@
 // src/config.js
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 function loadConfig(env = process.env) {
   return {

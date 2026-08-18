@@ -45,18 +45,33 @@ This implementation includes:
    npm install
    ```
 
-2. Start the development server:
+2. Copy the example env file and fill in the required values:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Generate a password hash for login and set it as `AUTH_PASSWORD_HASH` in `.env`:
+   ```bash
+   npm run hash-password -- "your chosen password"
+   ```
+
+4. Create and seed the SQLite database:
+   ```bash
+   npm run seed
+   ```
+
+5. Start the development server:
    ```bash
    npm start
    ```
 
-3. Visit http://localhost:3001 to access the application
+6. Visit http://localhost:3001, sign in with the password you hashed in step 3, and access the application.
 
 ## Architecture
 
 The MVP follows the implementation plan with these components:
 - Express.js backend with EJS templating
-- SQLite database for persistence (in-memory for simplicity)
+- SQLite database for persistence (via `better-sqlite3`), with session-based single-password auth gating the app
 - Simple frontend with CSS styling
 - Minimalist UI focused on writing surface
 - Collapsible chat panel
