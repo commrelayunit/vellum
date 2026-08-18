@@ -27,15 +27,27 @@ CREATE TABLE IF NOT EXISTS ai_providers (
   base_url TEXT NOT NULL,
   api_key_encrypted TEXT NOT NULL,
   default_model TEXT,
+  avatar_url TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
-- `label` — free text, user-chosen (e.g. "OpenClaw – home", "Claude direct", "z.ai"). No enum/category field — see Background above.
+- `label` — free text, user-chosen (e.g. "OpenClaw – home", "Claude direct", "z.ai"). No enum/category field — see Background above. Also serves as the display name; no separate name field.
 - `base_url` — the OpenAI-compatible endpoint root (e.g. `http://localhost:18789/v1`, `https://api.anthropic.com/v1`).
 - `api_key_encrypted` — never stored in plaintext (see Encryption below).
 - `default_model` — optional; a model name to default to for this provider (e.g. `claude-sonnet-4-5`). Nullable — purely informational until chat wiring exists.
+- `avatar_url` — optional custom image URL for the provider's display picture. Nullable — see Avatar Display below for what renders when it's absent.
+
+## Avatar Display
+
+Each provider gets a small circular picture in the settings list (and, later, wherever chat wiring surfaces providers as participants — matching the existing collaborator-presence avatar style). Resolved at render time, in this order, with nothing beyond `avatar_url` stored in the DB:
+
+1. **Custom URL set** — render `avatar_url` directly as the image source.
+2. **No custom URL, label matches a known brand** — a small built-in lookup table (in `src/public/js/main.js` or a dedicated `provider-avatars.js`) maps case-insensitive substrings of `label` (e.g. `"openai"`, `"claude"`/`"anthropic"`) to a [Simple Icons](https://simpleicons.org/) CDN URL (e.g. `https://cdn.simpleicons.org/openai`). Simple Icons are free, single-color brand-mark SVGs built specifically for third-party use, and their monochrome style matches Vellum's existing ink-on-paper design language — no logo assets are downloaded or bundled into the repo, only hotlinked by URL, avoiding any concern about redistributing brand assets in git.
+3. **No match** (covers OpenClaw, Hermes, z.ai, self-hosted Ollama, or anything else not in the small known-brand table) — fall back to an initials + color circle, the same visual pattern as the existing collaborator-presence avatars (`.presence-avatar`). Initials are derived from `label`; the color is deterministically derived from a hash of `label` mapped into a small fixed palette, so it stays stable across reloads without needing its own stored column.
+
+This logic is pure presentation — it doesn't affect storage, the repo interface, or the routes below, beyond the addition of the single `avatar_url` column.
 
 ## Encryption
 
@@ -64,10 +76,10 @@ The API key is never sent back to the browser in plaintext after creation:
 
 ```js
 createProvidersRepo(db) => {
-  list(),                                    // returns [{id, label, baseUrl, maskedKey, defaultModel, ...}]
+  list(),                                    // returns [{id, label, baseUrl, maskedKey, defaultModel, avatarUrl, ...}]
   getById(id),                               // same shape, single row
-  create({label, baseUrl, apiKey, defaultModel}),
-  update(id, {label, baseUrl, apiKey, defaultModel}),  // apiKey optional — omit/blank to leave unchanged
+  create({label, baseUrl, apiKey, defaultModel, avatarUrl}),
+  update(id, {label, baseUrl, apiKey, defaultModel, avatarUrl}),  // apiKey optional — omit/blank to leave unchanged
   remove(id)
 }
 ```
@@ -79,13 +91,13 @@ createProvidersRepo(db) => {
 All new routes live in `src/server.js`, gated by `requireAuth` (same middleware, same convention as every existing route):
 
 - `GET /settings` — renders the provider list.
-- `POST /api/providers` — create. Validates `label` and `baseUrl` as non-empty strings, `apiKey` required non-empty string. 400 on invalid input (matching the validation pattern already used by `POST /api/projects` and `POST /api/save-file/:fileId`).
+- `POST /api/providers` — create. Validates `label` and `baseUrl` as non-empty strings, `apiKey` required non-empty string. `avatarUrl` is optional and unvalidated beyond being a string (no fetch/existence check — same "storage, not live integration" stance as `baseUrl`). 400 on invalid input (matching the validation pattern already used by `POST /api/projects` and `POST /api/save-file/:fileId`).
 - `POST /api/providers/:id` — update. Same validation, except `apiKey` is optional (blank/omitted = unchanged).
 - `POST /api/providers/:id/delete` — delete. Matches the app's existing form-friendly POST convention (no DELETE verb elsewhere in the app, no fetch-based SPA routing to justify adding one here).
 
 ## UI
 
-- `src/views/settings.ejs` — new view, built from `partials/header`/`partials/footer` like every other page. Provider list styled like `projects.ejs`'s card list: monochrome, icon-only actions (edit/delete), no borders/fills, consistent with the rest of the app. An inline "+ Add provider" form follows the same pattern as the existing new-project flow in `main.js`.
+- `src/views/settings.ejs` — new view, built from `partials/header`/`partials/footer` like every other page. Provider list styled like `projects.ejs`'s card list: monochrome, icon-only actions (edit/delete), no borders/fills, consistent with the rest of the app. Each row shows the resolved avatar (see Avatar Display above) next to the label. An inline "+ Add provider" form follows the same pattern as the existing new-project flow in `main.js`, with an optional avatar-URL field.
 - Navigation: a "Settings" item added to the existing ⋮ dropdown menu in `partials/header.ejs`, visible on every page alongside "New project" / "Back to projects".
 - `src/public/css/style.css`: reuse `.project-card`-style classes where the shape matches; add only what's genuinely new (masked-key display, inline edit-form state).
 - `src/public/js/main.js`: add settings-page form handlers (add/edit/delete) following the existing fetch-based patterns already in the file (e.g. the new-project flow added in the SQLite persistence work).
@@ -93,7 +105,8 @@ All new routes live in `src/server.js`, gated by `requireAuth` (same middleware,
 ## Testing
 
 - `src/crypto/secrets.test.js` — encrypt/decrypt round-trips to the original plaintext; ciphertext is verifiably different from plaintext; decrypting with a wrong key fails rather than silently returning garbage.
-- `src/db/providers.test.js` — repo CRUD against an in-memory DB (matching every other `src/db/*.test.js`), including: `list()`/`getById()` never return a decrypted key, only a masked one; `update()` with a blank `apiKey` leaves the stored encrypted value unchanged; `remove()` actually removes the row.
+- `src/db/providers.test.js` — repo CRUD against an in-memory DB (matching every other `src/db/*.test.js`), including: `list()`/`getById()` never return a decrypted key, only a masked one; `update()` with a blank `apiKey` leaves the stored encrypted value unchanged; `remove()` actually removes the row; `avatarUrl` round-trips through create/update like any other field.
+- Avatar fallback logic (known-brand lookup → initials/color) is presentation-only JS with no server-side test coverage needed here — same rationale as not testing CSS.
 - `server.test.js` additions — authenticated create/list/update/delete round trip; an unauthenticated-redirect check for `GET /settings` matching the existing gating tests for other routes.
 
 ## Explicitly out of scope
@@ -102,3 +115,4 @@ All new routes live in `src/server.js`, gated by `requireAuth` (same middleware,
 - Any category/type field distinguishing agents from cloud subscriptions from self-hosted models — see Background.
 - Live validation of a provider's `base_url` (e.g. pinging `/v1/models` to confirm it's reachable) — this is credential storage, not a working integration yet.
 - Multi-user accounts — see Scope note above.
+- Image upload / file storage for avatars — `avatar_url` is a link to an externally-hosted image, not an uploaded file. No new storage location, no multipart handling.
