@@ -148,6 +148,39 @@ app.post('/api/providers', requireAuth, (req, res) => {
   res.status(201).json({ success: true, provider });
 });
 
+app.post('/api/providers/:id', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { label, baseUrl, apiKey, defaultModel, avatarUrl } = req.body;
+  if (typeof label !== 'string' || !label.trim()) {
+    return res.status(400).json({ success: false, message: 'Label is required' });
+  }
+  if (typeof baseUrl !== 'string' || !baseUrl.trim()) {
+    return res.status(400).json({ success: false, message: 'Base URL is required' });
+  }
+  const existing = providersRepo.getById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'Provider not found' });
+  }
+  const provider = providersRepo.update(id, {
+    label: label.trim(),
+    baseUrl: baseUrl.trim(),
+    apiKey: typeof apiKey === 'string' ? apiKey.trim() : '',
+    defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
+    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null
+  });
+  res.json({ success: true, provider });
+});
+
+app.post('/api/providers/:id/delete', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const removed = providersRepo.remove(id);
+  if (removed) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ success: false, message: 'Provider not found' });
+  }
+});
+
 if (process.env.NODE_ENV === 'production') {
   if (!config.authPasswordHash) {
     console.warn(

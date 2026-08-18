@@ -219,3 +219,81 @@ test('POST /api/providers rejects a missing label, base URL, or API key', async 
   assert.equal(res.status, 400);
   server.close();
 });
+
+test('POST /api/providers/:id updates label/baseUrl without touching the key when apiKey is blank', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'z.ai', baseUrl: 'https://api.z.ai/v1', apiKey: 'key-1111' })
+  });
+  const { provider } = await createRes.json();
+
+  const updateRes = await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'z.ai renamed', baseUrl: 'https://api.z.ai/v1', apiKey: '' })
+  });
+  assert.equal(updateRes.status, 200);
+  const data = await updateRes.json();
+  assert.equal(data.success, true);
+  assert.equal(data.provider.label, 'z.ai renamed');
+  assert.equal(data.provider.maskedKey, '•••• 1111');
+  server.close();
+});
+
+test('POST /api/providers/:id 404s for an unknown id', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/providers/999999`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'x', baseUrl: 'http://x', apiKey: '' })
+  });
+  assert.equal(res.status, 404);
+  server.close();
+});
+
+test('POST /api/providers/:id/delete removes the provider', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'temp', baseUrl: 'http://temp', apiKey: 'key-temp' })
+  });
+  const { provider } = await createRes.json();
+
+  const deleteRes = await fetch(`${base}/api/providers/${provider.id}/delete`, {
+    method: 'POST',
+    headers: { Cookie: cookie }
+  });
+  assert.equal(deleteRes.status, 200);
+  const data = await deleteRes.json();
+  assert.equal(data.success, true);
+
+  const listRes = await fetch(`${base}/settings`, { headers: { Cookie: cookie } });
+  const listBody = await listRes.text();
+  assert.doesNotMatch(listBody, /temp/);
+  server.close();
+});
+
+test('POST /api/providers/:id/delete 404s for an unknown id', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/providers/999999/delete`, {
+    method: 'POST',
+    headers: { Cookie: cookie }
+  });
+  assert.equal(res.status, 404);
+  server.close();
+});
