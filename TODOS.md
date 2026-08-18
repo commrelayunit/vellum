@@ -72,8 +72,8 @@
 
 ## Deployment Considerations
 
-- [ ] Configure Proxmox container settings
-- [ ] Set up Tailscale network access
+- [x] Configure Proxmox container settings
+- [x] Set up Tailscale network access
 - [ ] Configure reverse proxy if needed
-- [ ] Document container deployment instructions
+- [x] Document container deployment instructions
 - [ ] Test in containerized environment
