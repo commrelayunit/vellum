@@ -61,7 +61,10 @@ app.get('/projects', requireAuth, (req, res) => {
     return {
       ...project,
       fileCount: files.length,
-      updatedAt: latestUpdate,
+      // SQLite's datetime('now') yields a naive UTC string with no timezone
+      // marker (e.g. "2026-08-18 06:26:40"); without converting to real
+      // ISO-8601 UTC, the client would parse it as local time.
+      updatedAt: `${latestUpdate.replace(' ', 'T')}Z`,
       recentFiles: files.slice(0, 3).map((f) => f.path)
     };
   });
@@ -69,6 +72,9 @@ app.get('/projects', requireAuth, (req, res) => {
 });
 
 app.post('/api/projects', requireAuth, (req, res) => {
+  if (req.body.name !== undefined && typeof req.body.name !== 'string') {
+    return res.status(400).json({ success: false, message: 'Project name must be a string' });
+  }
   const name = (req.body.name || '').trim();
   if (!name) {
     return res.status(400).json({ success: false, message: 'Project name is required' });
@@ -92,7 +98,7 @@ app.get('/writing', requireAuth, (req, res) => {
   const file = req.query.file
     ? filesRepo.getById(parseInt(req.query.file, 10))
     : filesRepo.getFirstForProject(project.id);
-  if (!file) {
+  if (!file || file.project_id !== project.id) {
     return res.status(404).send('No file to open for this project');
   }
   res.render('writing', { project, file });
@@ -101,6 +107,9 @@ app.get('/writing', requireAuth, (req, res) => {
 app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
   const fileId = parseInt(req.params.fileId, 10);
   const { content } = req.body;
+  if (typeof content !== 'string') {
+    return res.status(400).json({ success: false, message: 'content must be a string' });
+  }
   const success = filesRepo.updateContent(fileId, content);
   if (success) {
     res.json({ success: true, message: 'File saved successfully' });
@@ -108,6 +117,23 @@ app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
     res.status(404).json({ success: false, message: 'File not found' });
   }
 });
+
+if (process.env.NODE_ENV === 'production') {
+  if (!config.authPasswordHash) {
+    console.warn(
+      'WARNING: AUTH_PASSWORD_HASH is not set. Every login attempt will fail. ' +
+      'Generate a hash with `npm run hash-password -- "your chosen password"` and set ' +
+      'AUTH_PASSWORD_HASH in your .env / systemd EnvironmentFile.'
+    );
+  }
+  if (config.sessionSecret === 'dev-secret-change-me') {
+    console.warn(
+      'WARNING: SESSION_SECRET is using the insecure development default. ' +
+      'Set SESSION_SECRET to a random value (e.g. `openssl rand -hex 32`) in your .env / ' +
+      'systemd EnvironmentFile.'
+    );
+  }
+}
 
 if (require.main === module) {
   app.listen(config.port, () => {

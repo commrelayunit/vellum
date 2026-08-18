@@ -8,7 +8,7 @@ function requireAuth(req, res, next) {
 }
 
 function verifyPassword(password, passwordHash) {
-  if (!passwordHash) return false;
+  if (typeof password !== 'string' || !passwordHash) return false;
   return bcrypt.compareSync(password, passwordHash);
 }
 
