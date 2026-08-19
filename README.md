@@ -17,6 +17,7 @@ The goal is a simple shared writing surface: project files, live Markdown editin
 
 - [Product spec](docs/SPEC.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
+- [Current implementation status](TODOS.md)
 
 ## Brand
 
@@ -72,34 +73,46 @@ This implementation includes:
 
 7. Visit http://localhost:3001, sign in with the password you hashed in step 3, and access the application.
 
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `PORT` | No (defaults to `3001`) | Port the server listens on. |
+| `DB_PATH` | No (defaults to `./data/vellum.db`) | Path to the SQLite database file. Created automatically on first run. |
+| `SESSION_SECRET` | Yes, in production | Random secret used to sign session cookies. Generate with `openssl rand -hex 32`. |
+| `AUTH_PASSWORD_HASH` | Yes | Bcrypt hash of your login password — never the plaintext. Generate with `npm run hash-password -- "your chosen password"`. Login is impossible until this is set. |
+| `ENCRYPTION_KEY` | Yes, to use AI provider settings | Encrypts/decrypts AI provider API keys stored in the database. Generate with `openssl rand -base64 32`. Never change this once providers have been saved — their keys become permanently unreadable. |
+| `NODE_ENV` | No (leave unset for local dev) | Set to `production` in deployments so Express disables dev-mode error pages (which would otherwise leak stack traces) and enables view caching. Set via the systemd unit's `Environment=` or the container's environment, not `.env`, in production. |
+
+Docker and the Proxmox LXC install script accept a plaintext `AUTH_PASSWORD` instead of a pre-hashed value, and generate `SESSION_SECRET`/`ENCRYPTION_KEY` automatically on first boot — see [docs/DOCKER.md](docs/DOCKER.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Choosing a Setup
+
+| | Development / trying it out | Production |
+|---|---|---|
+| **Native (no container)** | `npm start` after `cp .env.example .env` and filling in `AUTH_PASSWORD_HASH`/`SESSION_SECRET`/`ENCRYPTION_KEY` by hand (see [Development Setup](#development-setup) above) — fastest inner loop; `npm run dev` live-reloads on changes. | Not recommended standalone — use Docker or LXC below so the process is supervised (Docker's restart policy or systemd) and comes back up after a crash or reboot on its own. |
+| **Docker** | `docker compose up -d --build` with a throwaway `AUTH_PASSWORD` in `.env` or your shell. `SESSION_SECRET`/`ENCRYPTION_KEY` auto-generate — no manual secret handling. Binds to `127.0.0.1` only by default, so it's not reachable from anywhere else on your network. | Same command, but treat `AUTH_PASSWORD` as a real credential (see the `.env` `$`-escaping warning in [docs/DOCKER.md](docs/DOCKER.md)), back up the named volume regularly — it holds both the database and the generated secrets, so a database-only backup can't recover it (see [docs/DOCKER.md § Backups](docs/DOCKER.md#backups)) — and deliberately open it up if you need it reachable beyond localhost rather than relying on the default (see [docs/DOCKER.md § Exposing beyond localhost](docs/DOCKER.md#exposing-beyond-localhost)). |
+| **Proxmox LXC** | `deploy/install-lxc.sh` — one command, sensible fixed defaults (VMID, storage pool, network bridge — all overridable via env vars, see the script's header). Good for trying Vellum out or a low-stakes personal instance. It still generates real secrets and gates login; it just skips customizing those defaults and doesn't set up the backup cron job for you. | Follow the full manual walkthrough in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) instead of the script — same end state, but you choose VMID/storage/network settings deliberately, verify each step as you go, and the walkthrough carries you through the Tailscale login and backup cron setup explicitly rather than leaving them as post-install reminders. |
+
 ## Architecture
 
-The MVP follows the implementation plan with these components:
-- Express.js backend with EJS templating
-- SQLite database for persistence (via `better-sqlite3`), with session-based single-password auth gating the app
-- Simple frontend with CSS styling
-- Minimalist UI focused on writing surface
-- Collapsible chat panel
-- Basic project/file navigation
-- Markdown editing capabilities
-- File history display
-- Simple chat interface
+- Express.js backend with EJS templating, server-rendered views, and a vanilla JS frontend (no build step)
+- SQLite database for persistence (via `better-sqlite3`), with session-based single-password auth gating every route
+- Markdown editor with live preview, save/load, and `.md` export
+- AI provider settings: store and manage encrypted API keys for any OpenAI-compatible backend (agents, cloud subscriptions, self-hosted models) — credential storage only; the chat panel does not yet call these providers
+- Collapsible chat panel and mock collaborator presence (decorative — no live multi-user backend yet)
+- Ships as a single Docker container or a one-command Proxmox LXC install, in addition to running directly with `npm start`
 
 ## Deployment
 
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Proxmox LXC setup (container creation, Tailscale, systemd service, backups, upgrades), or run `deploy/install-lxc.sh` for a one-command version of the same steps.
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Proxmox LXC setup (container creation, Tailscale, systemd service, backups, upgrades), or run `deploy/install-lxc.sh` to automate steps 1–8 of that walkthrough (Tailscale login and the backup cron job are still separate manual steps after it finishes).
 - [docs/DOCKER.md](docs/DOCKER.md) — run Vellum in a single Docker container.
 
 ## Status
 
-MVP - Local Private Workspace (M1) with simplified UI
+Local Private Workspace (M1) is complete and hardened beyond its original scope: real SQLite persistence (not in-memory), session-based password authentication, and encrypted AI provider credential storage, all deployable as a single Docker container or Proxmox LXC. See [TODOS.md](TODOS.md) for the full milestone-by-milestone breakdown.
 
-The current implementation provides:
-- Clean, minimalist writing surface
-- Monospace font (Courier New) 
-- No borders or excessive styling
-- Collapsible chat panel
-- All core functionality working
+Not yet built: chat bound to a project/file (M2), agent-proposed edits (M3), live agent presence (M3.5), history/named versions (M4), git materialization (M5), real multi-user live collaboration (M6) — the presence avatars and decorative live-cursor in the writing view are mock UI for that future milestone, not working collaboration — and a browser-control escape hatch (M7).
 
 ## License
 

@@ -23,14 +23,14 @@ Set your login password as an environment variable, either in your shell or in a
 AUTH_PASSWORD=your-chosen-password
 ```
 
+**`AUTH_PASSWORD` is the only value you need to provide.** Don't set `AUTH_PASSWORD_HASH`, `SESSION_SECRET`, or `ENCRYPTION_KEY` in this file — those are for the non-Docker `npm start` setup ([main README](../README.md#environment-variables)), and Docker generates all three automatically on first start, saving them into the same persistent volume as the database so they survive container restarts and upgrades. If you're coming from that setup and already ran `npm run hash-password`, you don't need that hash here — just put your plaintext password in `AUTH_PASSWORD`.
+
 **Warning: if your password contains a literal `$`, a `.env` file will silently mangle it.** Compose treats `$` in `.env` values as the start of a variable reference — `AUTH_PASSWORD=my$ecret` becomes just `my` (Compose drops the undefined `$ecret` reference), and `AUTH_PASSWORD=dollar$HOME` leaks your host's `$HOME` value into the credential. If your password contains `$`, either:
 
 - write it as `$$` in the `.env` file (Compose's escape for a literal dollar sign), e.g. `AUTH_PASSWORD=my$$ecret`, or
 - set it via the shell environment instead of `.env`, e.g. `AUTH_PASSWORD='my$ecret' docker compose up -d`.
 
-You can double-check the effective value Compose will actually pass through with `docker compose config` before starting the stack.
-
-That's the only value you need to provide. `SESSION_SECRET` and `ENCRYPTION_KEY` are generated automatically on first start and saved into the same persistent volume as the database, so they survive container restarts and upgrades without any action from you.
+You can double-check the effective value Compose will actually pass through with `docker compose config` before starting the stack. The `$` escaping rule above applies to every value in this file, not just `AUTH_PASSWORD`: Compose interpolates `.env` before it even looks at `docker-compose.yml`, so an unrelated line like a stray `AUTH_PASSWORD_HASH=$2b$12$...` (a bcrypt hash, which always contains literal `$` characters) will trigger the same "variable is not set" warnings even though nothing reads that key — because Compose doesn't know it's unused until after it's already tried to interpolate the whole file. The warnings are harmless in that case, but they're a sign something that shouldn't be in this file is in this file.
 
 ## 2. Start
 
