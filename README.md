@@ -98,9 +98,11 @@ Docker and the Proxmox LXC install script accept a plaintext `AUTH_PASSWORD` ins
 
 - Express.js backend with EJS templating, server-rendered views, and a vanilla JS frontend (no build step)
 - SQLite database for persistence (via `better-sqlite3`), with session-based single-password auth gating every route
+- Schema managed by a numbered migrations runner (`src/db/migrations/`) that applies pending migrations incrementally on every startup — see [Updating](#updating)
 - Markdown editor with live preview, save/load, and `.md` export
-- AI provider settings: store and manage encrypted API keys for any OpenAI-compatible backend (agents, cloud subscriptions, self-hosted models) — credential storage only; the chat panel does not yet call these providers
-- Collapsible chat panel and mock collaborator presence (decorative — no live multi-user backend yet)
+- A user profile (display name and avatar), editable from the Settings page, used to identify you in the writing view
+- AI provider settings: store and manage encrypted API keys for any OpenAI-compatible backend (agents, cloud subscriptions, self-hosted models) — credential storage only; the chat panel does not yet call these providers. Each provider can be toggled active-in-workspace to appear as a presence avatar in the writing view.
+- Writing view shows real presence — your profile and any active-in-workspace providers as avatars, plus live highlighting of the line your cursor is on — alongside a collapsible chat panel with static placeholder messages (decorative — no live chat backend yet)
 - Ships as a single Docker container or a one-command Proxmox LXC install, in addition to running directly with `npm start`
 
 ## Deployment
@@ -108,11 +110,19 @@ Docker and the Proxmox LXC install script accept a plaintext `AUTH_PASSWORD` ins
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Proxmox LXC setup (container creation, Tailscale, systemd service, backups, upgrades), or run `deploy/install-lxc.sh` to automate steps 1–8 of that walkthrough (Tailscale login and the backup cron job are still separate manual steps after it finishes).
 - [docs/DOCKER.md](docs/DOCKER.md) — run Vellum in a single Docker container.
 
+## Updating
+
+Every deployment path is safe to update in place — schema changes apply automatically and incrementally on startup (see `src/db/migrations/`), and never wipe existing projects, files, provider credentials, or settings.
+
+- **Native**: `npm run update` (`git pull && npm ci && npm run migrate`), then restart the server.
+- **Docker**: `git pull && docker compose up -d --build` — migrations run automatically when the container starts. See [docs/DOCKER.md](docs/DOCKER.md).
+- **Proxmox LXC**: see [docs/DEPLOYMENT.md § Upgrading](docs/DEPLOYMENT.md#11-upgrading).
+
 ## Status
 
-Local Private Workspace (M1) is complete and hardened beyond its original scope: real SQLite persistence (not in-memory), session-based password authentication, and encrypted AI provider credential storage, all deployable as a single Docker container or Proxmox LXC. See [TODOS.md](TODOS.md) for the full milestone-by-milestone breakdown.
+Local Private Workspace (M1) is complete and hardened beyond its original scope: real SQLite persistence via a numbered migrations runner (not in-memory, not a hand-run static schema), session-based password authentication, a user profile, and encrypted AI provider credential storage — with providers individually toggleable as active-in-workspace — all deployable as a single Docker container or Proxmox LXC. See [TODOS.md](TODOS.md) for the full milestone-by-milestone breakdown.
 
-Not yet built: chat bound to a project/file (M2), agent-proposed edits (M3), live agent presence (M3.5), history/named versions (M4), git materialization (M5), real multi-user live collaboration (M6) — the presence avatars and decorative live-cursor in the writing view are mock UI for that future milestone, not working collaboration — and a browser-control escape hatch (M7).
+Not yet built: chat bound to a project/file (M2), agent-proposed edits (M3), full agent live-presence states such as reading/reviewing/proposing (M3.5), history/named versions (M4), git materialization (M5), real multi-user live collaboration (M6), and a browser-control escape hatch (M7). The writing view's presence stack (your profile plus any providers marked active-in-workspace) and its cursor-line highlighting reflect real data and your real cursor position today — they're no longer the hardcoded mock collaborators of earlier milestones — but presence is still single-user: nothing yet broadcasts live activity between multiple simultaneous people (that's M6).
 
 ## License
 

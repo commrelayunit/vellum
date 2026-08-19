@@ -160,3 +160,5 @@ systemctl restart vellum
 The database lives in `/var/lib/vellum/data`, outside `/opt/vellum`, so `git pull` never touches it.
 
 **Existing installs upgrading past the AI provider settings feature must add `ENCRYPTION_KEY` to `/etc/vellum/vellum.env` before the Settings page will work.** Without it, the page still appears in the menu but every save fails (see the `## 6. Configure` section above for the generation command: `openssl rand -base64 32`), and the only in-app signal is a warning in `journalctl -u vellum` that's easy to miss.
+
+Schema changes apply automatically and incrementally on every restart — existing projects, files, provider credentials, and settings are never wiped.

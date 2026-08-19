@@ -11,6 +11,8 @@
     "dev": "nodemon src/server.js",
     "seed": "node src/scripts/seed.js",
     "hash-password": "node src/scripts/hash-password.js",
+    "migrate": "node src/scripts/migrate.js",
+    "update": "git pull && npm ci && npm run migrate",
     "test": "node --test"
   },
   "keywords": [
