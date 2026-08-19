@@ -414,6 +414,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('[data-avatar-target]').forEach(resolveProviderAvatar);
 
+    // Writing view: highlight the line your cursor is currently on.
+    const lineTint = document.getElementById('cursor-line-tint');
+    if (editorTextarea && lineTint) {
+        // Matches .editor-textarea's 14px font-size * 1.5 line-height.
+        const LINE_HEIGHT_PX = 21;
+
+        function updateCursorLineTint() {
+            const value = editorTextarea.value;
+            const cursorPos = editorTextarea.selectionStart;
+            const linesBeforeCursor = value.slice(0, cursorPos).split('\n').length - 1;
+            const top = linesBeforeCursor * LINE_HEIGHT_PX - editorTextarea.scrollTop;
+            lineTint.style.top = `${top}px`;
+        }
+
+        editorTextarea.addEventListener('click', updateCursorLineTint);
+        editorTextarea.addEventListener('keyup', updateCursorLineTint);
+        editorTextarea.addEventListener('input', updateCursorLineTint);
+        editorTextarea.addEventListener('select', updateCursorLineTint);
+        editorTextarea.addEventListener('scroll', updateCursorLineTint);
+        updateCursorLineTint();
+    }
+
     // Settings page: add/edit/delete provider forms
     const providersList = document.getElementById('providers-list');
     const newProviderBtn = document.getElementById('new-provider-btn');
