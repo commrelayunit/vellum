@@ -76,4 +76,4 @@
 - [x] Set up Tailscale network access
 - [ ] Configure reverse proxy if needed
 - [x] Document container deployment instructions
-- [ ] Test in containerized environment
+- [x] Test in containerized environment (Docker: build/run/restart/persistence/security posture all live-verified; Proxmox LXC script still needs a run against real hardware)
