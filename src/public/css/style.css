@@ -605,6 +605,20 @@ body {
   margin-bottom: 0.5rem;
 }
 
+.login-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-title .caret {
+  width: 2px;
+  height: 14px;
+  margin-left: 2px;
+  background-color: var(--ink);
+  animation: cursor-blink 1s steps(1) infinite;
+}
+
 .login-form input {
   width: 100%;
   background: none;
@@ -613,6 +627,7 @@ body {
   text-align: center;
   font-family: inherit;
   font-size: 13px;
+  line-height: 1.4;
   color: var(--ink);
 }
 

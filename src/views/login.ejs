@@ -12,12 +12,17 @@
     <div class="app-container">
         <main class="app-main login-main">
             <form class="login-form" method="POST" action="/login">
-                <h1 class="app-title">vellum</h1>
+                <h1 class="app-title login-title">vellum<span class="caret" aria-hidden="true"></span></h1>
                 <input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus>
                 <% if (error) { %>
                     <p class="login-error"><%= error %></p>
                 <% } %>
-                <button type="submit" class="btn btn-primary">Sign in</button>
+                <button type="submit" class="btn btn-primary" aria-label="Sign in" title="Sign in">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12h14"/>
+                        <path d="M13 6l6 6-6 6"/>
+                    </svg>
+                </button>
             </form>
         </main>
     </div>
