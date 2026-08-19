@@ -417,6 +417,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function resolveProviderAvatar(target) {
         const customUrl = target.dataset.avatarUrl;
         const label = target.dataset.label || '';
+        const skipBrandLookup = target.dataset.skipBrandLookup === 'true';
 
         function withImageFallback(src) {
             const img = document.createElement('img');
@@ -438,10 +439,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const known = KNOWN_PROVIDER_ICONS.find(function(entry) { return entry.pattern.test(label); });
-        if (known) {
-            withImageFallback(`https://cdn.simpleicons.org/${known.slug}`);
-            return;
+        if (!skipBrandLookup) {
+            const known = KNOWN_PROVIDER_ICONS.find(function(entry) { return entry.pattern.test(label); });
+            if (known) {
+                withImageFallback(`https://cdn.simpleicons.org/${known.slug}`);
+                return;
+            }
         }
 
         renderInitialsFallback(target, label);
@@ -644,6 +647,131 @@ document.addEventListener('DOMContentLoaded', function() {
                         showDeleteError('Could not reach the server — check your connection and try again.');
                     });
             }
+        });
+    }
+
+    // Settings page: your profile card
+    const profileCard = document.getElementById('profile-card');
+    if (profileCard) {
+        profileCard.addEventListener('click', function(e) {
+            const editBtn = e.target.closest('.profile-edit-btn');
+            if (!editBtn) return;
+            if (profileCard.querySelector('form')) return;
+
+            const info = profileCard.querySelector('.project-info');
+            const form = document.createElement('form');
+            form.className = 'provider-form';
+
+            const labelInput = document.createElement('input');
+            labelInput.type = 'text';
+            labelInput.placeholder = 'Your name';
+            labelInput.required = true;
+            labelInput.autocomplete = 'off';
+            labelInput.value = profileCard.dataset.label;
+
+            const avatarUrlInput = document.createElement('input');
+            avatarUrlInput.type = 'text';
+            avatarUrlInput.placeholder = 'Avatar image URL (optional)';
+            avatarUrlInput.autocomplete = 'off';
+            avatarUrlInput.value = profileCard.dataset.avatarUrl;
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'submit';
+            confirmBtn.className = 'btn';
+            confirmBtn.setAttribute('aria-label', 'Save profile');
+            confirmBtn.title = 'Save';
+            confirmBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'btn';
+            cancelBtn.setAttribute('aria-label', 'Cancel');
+            cancelBtn.title = 'Cancel';
+            cancelBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>';
+
+            const actions = document.createElement('div');
+            actions.className = 'provider-form-actions';
+            actions.appendChild(confirmBtn);
+            actions.appendChild(cancelBtn);
+
+            const errorEl = document.createElement('p');
+            errorEl.className = 'provider-form-error';
+            errorEl.hidden = true;
+
+            form.appendChild(labelInput);
+            form.appendChild(avatarUrlInput);
+            form.appendChild(actions);
+            form.appendChild(errorEl);
+
+            form.addEventListener('submit', function(ev) {
+                ev.preventDefault();
+                errorEl.hidden = true;
+                confirmBtn.disabled = true;
+                fetch('/api/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        label: labelInput.value.trim(),
+                        avatarUrl: avatarUrlInput.value.trim()
+                    })
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        confirmBtn.disabled = false;
+                        errorEl.textContent = data.message || 'Something went wrong.';
+                        errorEl.hidden = false;
+                    }
+                })
+                .catch(function() {
+                    confirmBtn.disabled = false;
+                    errorEl.textContent = 'Could not reach the server — check your connection and try again.';
+                    errorEl.hidden = false;
+                });
+            });
+
+            info.replaceWith(form);
+            cancelBtn.addEventListener('click', function() {
+                form.replaceWith(info);
+            });
+        });
+    }
+
+    // Settings page: toggle a provider's active-in-workspace state
+    if (providersList) {
+        providersList.addEventListener('click', function(e) {
+            const toggleBtn = e.target.closest('.provider-toggle-active-btn');
+            if (!toggleBtn) return;
+
+            const card = toggleBtn.closest('.provider-card');
+            const currentlyActive = toggleBtn.dataset.active === 'true';
+
+            toggleBtn.disabled = true;
+            fetch(`/api/providers/${card.dataset.providerId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    label: card.dataset.label,
+                    baseUrl: card.dataset.baseUrl,
+                    apiKey: '',
+                    defaultModel: card.dataset.defaultModel,
+                    avatarUrl: card.dataset.avatarUrl,
+                    activeInWorkspace: !currentlyActive
+                })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    toggleBtn.disabled = false;
+                }
+            })
+            .catch(function() {
+                toggleBtn.disabled = false;
+            });
         });
     }
 });

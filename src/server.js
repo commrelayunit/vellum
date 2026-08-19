@@ -126,7 +126,8 @@ app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
 
 app.get('/settings', requireAuth, (req, res) => {
   const providers = providersRepo.list();
-  res.render('settings', { providers });
+  const profile = userProfileRepo.get();
+  res.render('settings', { providers, profile });
 });
 
 app.post('/api/providers', requireAuth, (req, res) => {
@@ -152,7 +153,7 @@ app.post('/api/providers', requireAuth, (req, res) => {
 
 app.post('/api/providers/:id', requireAuth, (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { label, baseUrl, apiKey, defaultModel, avatarUrl } = req.body;
+  const { label, baseUrl, apiKey, defaultModel, avatarUrl, activeInWorkspace } = req.body;
   if (typeof label !== 'string' || !label.trim()) {
     return res.status(400).json({ success: false, message: 'Label is required' });
   }
@@ -168,7 +169,8 @@ app.post('/api/providers/:id', requireAuth, (req, res) => {
     baseUrl: baseUrl.trim(),
     apiKey: typeof apiKey === 'string' ? apiKey.trim() : '',
     defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
-    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null
+    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
+    activeInWorkspace: typeof activeInWorkspace === 'boolean' ? activeInWorkspace : existing.activeInWorkspace
   });
   res.json({ success: true, provider });
 });

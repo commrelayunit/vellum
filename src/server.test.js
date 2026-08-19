@@ -382,3 +382,71 @@ test('unauthenticated POST /api/profile redirects to /login', async () => {
   assert.equal(res.status, 302);
   server.close();
 });
+
+test('GET /settings renders the real user profile, not a placeholder', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Real Profile Name' })
+  });
+  const res = await fetch(`${base}/settings`, { headers: { Cookie: cookie } });
+  const body = await res.text();
+  assert.match(body, /Real Profile Name/);
+  server.close();
+});
+
+test('POST /api/providers/:id toggles activeInWorkspace', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Toggle Test', baseUrl: 'http://x', apiKey: 'key-zzzz' })
+  });
+  const { provider } = await createRes.json();
+  assert.equal(provider.activeInWorkspace, false);
+
+  const toggleRes = await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Toggle Test', baseUrl: 'http://x', apiKey: '', activeInWorkspace: true })
+  });
+  const toggled = await toggleRes.json();
+  assert.equal(toggled.provider.activeInWorkspace, true);
+  server.close();
+});
+
+test('POST /api/providers/:id preserves activeInWorkspace when the field is omitted', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Preserve Test', baseUrl: 'http://x', apiKey: 'key-yyyy' })
+  });
+  const { provider } = await createRes.json();
+
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Preserve Test', baseUrl: 'http://x', apiKey: '', activeInWorkspace: true })
+  });
+
+  const editRes = await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Preserve Test Renamed', baseUrl: 'http://x', apiKey: '' })
+  });
+  const edited = await editRes.json();
+  assert.equal(edited.provider.label, 'Preserve Test Renamed');
+  assert.equal(edited.provider.activeInWorkspace, true);
+  server.close();
+});

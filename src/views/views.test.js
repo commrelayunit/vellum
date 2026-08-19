@@ -40,9 +40,19 @@ test('settings.ejs renders a provider card with masked key and no plaintext', as
         defaultModel: 'claude-sonnet-4-5',
         avatarUrl: null
       }
-    ]
+    ],
+    profile: { label: 'Test Person', avatarUrl: null }
   });
   assert.match(html, /OpenClaw – home/);
   assert.match(html, /•••• 9999/);
   assert.doesNotMatch(html, /block\(/);
+});
+
+test('settings.ejs renders the user profile card', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'settings.ejs'), {
+    providers: [],
+    profile: { label: 'Test Person', avatarUrl: null }
+  });
+  assert.match(html, /Test Person/);
+  assert.match(html, /data-skip-brand-lookup="true"/);
 });
