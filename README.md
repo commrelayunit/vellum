@@ -102,7 +102,7 @@ Docker and the Proxmox LXC install script accept a plaintext `AUTH_PASSWORD` ins
 - Markdown editor with live preview, save/load, and `.md` export
 - A user profile (display name and avatar), editable from the Settings page, used to identify you in the writing view
 - AI provider settings: store and manage encrypted API keys for any OpenAI-compatible backend (agents, cloud subscriptions, self-hosted models) — credential storage only; the chat panel does not yet call these providers. Each provider can be toggled active-in-workspace to appear as a presence avatar in the writing view.
-- Writing view shows real presence — your profile and any active-in-workspace providers as avatars, plus live highlighting of the line your cursor is on — alongside a collapsible chat panel with static placeholder messages (decorative — no live chat backend yet)
+- Writing view shows real presence — your profile and any active-in-workspace providers as avatars, plus live highlighting of the line your cursor is on (tracks logical lines; very long wrapped lines may highlight imprecisely) — alongside a collapsible chat panel with static placeholder messages (decorative — no live chat backend yet)
 - Ships as a single Docker container or a one-command Proxmox LXC install, in addition to running directly with `npm start`
 
 ## Deployment
@@ -122,7 +122,7 @@ Every deployment path is safe to update in place — schema changes apply automa
 
 Local Private Workspace (M1) is complete and hardened beyond its original scope: real SQLite persistence via a numbered migrations runner (not in-memory, not a hand-run static schema), session-based password authentication, a user profile, and encrypted AI provider credential storage — with providers individually toggleable as active-in-workspace — all deployable as a single Docker container or Proxmox LXC. See [TODOS.md](TODOS.md) for the full milestone-by-milestone breakdown.
 
-Not yet built: chat bound to a project/file (M2), agent-proposed edits (M3), full agent live-presence states such as reading/reviewing/proposing (M3.5), history/named versions (M4), git materialization (M5), real multi-user live collaboration (M6), and a browser-control escape hatch (M7). The writing view's presence stack (your profile plus any providers marked active-in-workspace) and its cursor-line highlighting reflect real data and your real cursor position today — they're no longer the hardcoded mock collaborators of earlier milestones — but presence is still single-user: nothing yet broadcasts live activity between multiple simultaneous people (that's M6).
+Not yet built: chat bound to a project/file (M2), agent-proposed edits (M3), full agent live-presence states such as reading/reviewing/proposing (M3.5), history/named versions (M4), git materialization (M5), real multi-user live collaboration (M6), and a browser-control escape hatch (M7). The writing view's presence stack (your profile plus any providers marked active-in-workspace) and its cursor-line highlighting reflect real data and your real cursor position today (tracking logical lines; very long wrapped lines may highlight imprecisely) — they're no longer the hardcoded mock collaborators of earlier milestones — but presence is still single-user: nothing yet broadcasts live activity between multiple simultaneous people (that's M6).
 
 ## License
 

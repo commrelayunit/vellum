@@ -7,4 +7,4 @@ const { migrate } = require('../db/schema');
 const db = createConnection(config.dbPath);
 migrate(db);
 db.close();
-console.log('Migrations applied.');
+console.log(`Migrations applied to ${config.dbPath}`);

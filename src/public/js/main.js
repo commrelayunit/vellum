@@ -371,7 +371,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderInitialsFallback(target, label) {
-        const color = AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
+        // The user's own profile avatar (data-skip-brand-lookup="true") always
+        // uses AVATAR_COLORS[0] (--presence-you) so it visually matches the
+        // "this is you" cursor-line tint, instead of a hash-derived color that
+        // would only coincidentally line up with --presence-you.
+        const isOwnProfile = target.dataset.skipBrandLookup === 'true';
+        const color = isOwnProfile
+            ? AVATAR_COLORS[0]
+            : AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
         target.style.backgroundColor = color;
         target.textContent = initialsFor(label);
     }
