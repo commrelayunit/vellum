@@ -115,3 +115,19 @@ test('a row that cannot be decrypted (e.g. stale/different ENCRYPTION_KEY) lists
   const byId = providersWithWrongKey.getById(created.id);
   assert.equal(byId.maskedKey, '•••• (unreadable)');
 });
+
+test('create() defaults activeInWorkspace to false when not provided', () => {
+  const { providers } = setup();
+  const created = providers.create({ label: 'A', baseUrl: 'http://a', apiKey: 'key-aaaa' });
+  assert.equal(created.activeInWorkspace, false);
+});
+
+test('create() and update() persist activeInWorkspace as a real boolean', () => {
+  const { providers } = setup();
+  const created = providers.create({ label: 'A', baseUrl: 'http://a', apiKey: 'key-aaaa', activeInWorkspace: true });
+  assert.equal(created.activeInWorkspace, true);
+  const updated = providers.update(created.id, {
+    label: 'A', baseUrl: 'http://a', apiKey: '', defaultModel: null, avatarUrl: null, activeInWorkspace: false
+  });
+  assert.equal(updated.activeInWorkspace, false);
+});

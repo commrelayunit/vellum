@@ -14,10 +14,6 @@ function toViewModel(row, secrets) {
   try {
     maskedKey = maskKey(secrets.decrypt(row.api_key_encrypted));
   } catch {
-    // The row was encrypted under a different/stale ENCRYPTION_KEY (e.g. a
-    // DB-only backup restored onto a host with a different env file). Don't
-    // let one un-decryptable row 500 the whole settings page - list it with
-    // a placeholder so it can still be found and deleted.
     maskedKey = UNREADABLE_KEY_LABEL;
   }
   return {
@@ -27,6 +23,7 @@ function toViewModel(row, secrets) {
     maskedKey,
     defaultModel: row.default_model,
     avatarUrl: row.avatar_url,
+    activeInWorkspace: !!row.active_in_workspace,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -41,21 +38,21 @@ function createProvidersRepo(db, secrets) {
       const row = db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(id);
       return row ? toViewModel(row, secrets) : undefined;
     },
-    create({ label, baseUrl, apiKey, defaultModel, avatarUrl }) {
+    create({ label, baseUrl, apiKey, defaultModel, avatarUrl, activeInWorkspace }) {
       const info = db
-        .prepare('INSERT INTO ai_providers (label, base_url, api_key_encrypted, default_model, avatar_url) VALUES (?, ?, ?, ?, ?)')
-        .run(label, baseUrl, secrets.encrypt(apiKey), defaultModel || null, avatarUrl || null);
+        .prepare('INSERT INTO ai_providers (label, base_url, api_key_encrypted, default_model, avatar_url, active_in_workspace) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(label, baseUrl, secrets.encrypt(apiKey), defaultModel || null, avatarUrl || null, activeInWorkspace ? 1 : 0);
       return this.getById(info.lastInsertRowid);
     },
-    update(id, { label, baseUrl, apiKey, defaultModel, avatarUrl }) {
+    update(id, { label, baseUrl, apiKey, defaultModel, avatarUrl, activeInWorkspace }) {
       if (apiKey) {
         db.prepare(
-          "UPDATE ai_providers SET label = ?, base_url = ?, api_key_encrypted = ?, default_model = ?, avatar_url = ?, updated_at = datetime('now') WHERE id = ?"
-        ).run(label, baseUrl, secrets.encrypt(apiKey), defaultModel || null, avatarUrl || null, id);
+          "UPDATE ai_providers SET label = ?, base_url = ?, api_key_encrypted = ?, default_model = ?, avatar_url = ?, active_in_workspace = ?, updated_at = datetime('now') WHERE id = ?"
+        ).run(label, baseUrl, secrets.encrypt(apiKey), defaultModel || null, avatarUrl || null, activeInWorkspace ? 1 : 0, id);
       } else {
         db.prepare(
-          "UPDATE ai_providers SET label = ?, base_url = ?, default_model = ?, avatar_url = ?, updated_at = datetime('now') WHERE id = ?"
-        ).run(label, baseUrl, defaultModel || null, avatarUrl || null, id);
+          "UPDATE ai_providers SET label = ?, base_url = ?, default_model = ?, avatar_url = ?, active_in_workspace = ?, updated_at = datetime('now') WHERE id = ?"
+        ).run(label, baseUrl, defaultModel || null, avatarUrl || null, activeInWorkspace ? 1 : 0, id);
       }
       return this.getById(id);
     },
