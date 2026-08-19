@@ -1,39 +1,37 @@
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS projects (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  description TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+const fs = require('fs');
+const path = require('path');
 
-CREATE TABLE IF NOT EXISTS files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id INTEGER NOT NULL REFERENCES projects(id),
-  path TEXT NOT NULL,
-  title TEXT,
-  mime_type TEXT NOT NULL DEFAULT 'text/markdown',
-  content TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(project_id, path)
-);
-
-CREATE TABLE IF NOT EXISTS ai_providers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  label TEXT NOT NULL,
-  base_url TEXT NOT NULL,
-  api_key_encrypted TEXT NOT NULL,
-  default_model TEXT,
-  avatar_url TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`;
-
-function migrate(db) {
-  db.exec(SCHEMA);
+function ensureMigrationsTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
 }
 
-module.exports = { migrate, SCHEMA };
+function loadMigrations() {
+  const dir = path.join(__dirname, 'migrations');
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.js'))
+    .sort()
+    .map((f) => require(path.join(dir, f)));
+}
+
+function migrate(db) {
+  ensureMigrationsTable(db);
+  const applied = new Set(
+    db.prepare('SELECT id FROM schema_migrations').all().map((row) => row.id)
+  );
+  for (const migration of loadMigrations()) {
+    if (applied.has(migration.id)) continue;
+    const run = db.transaction(() => {
+      migration.up(db);
+      db.prepare('INSERT INTO schema_migrations (id) VALUES (?)').run(migration.id);
+    });
+    run();
+  }
+}
+
+module.exports = { migrate };
