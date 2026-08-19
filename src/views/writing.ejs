@@ -4,7 +4,12 @@
     <div class="editor-header">
         <div class="file-path"><%= project.name %> / <%= file.path %></div>
         <div class="editor-header-right">
-            <div class="presence-stack" id="presence-stack" aria-label="People in this file"></div>
+            <div class="presence-stack" id="presence-stack" aria-label="People in this file">
+                <div class="provider-avatar presence-avatar" data-avatar-target data-skip-brand-lookup="true" data-label="<%= profile.label %>" <% if (profile.avatarUrl) { %>data-avatar-url="<%= profile.avatarUrl %>"<% } %> title="<%= profile.label %>"></div>
+                <% activeProviders.forEach(function(provider) { %>
+                    <div class="provider-avatar presence-avatar" data-avatar-target data-label="<%= provider.label %>" <% if (provider.avatarUrl) { %>data-avatar-url="<%= provider.avatarUrl %>"<% } %> title="<%= provider.label %>"></div>
+                <% }); %>
+            </div>
             <div class="editor-actions">
                 <button class="btn btn-secondary" id="preview-toggle" aria-label="Show preview" title="Preview">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -26,7 +31,6 @@
     <div class="editor-content">
         <div class="cursor-line-tint" id="cursor-line-tint"></div>
         <textarea id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>"><%= file.content %></textarea>
-        <div class="cursor-flag" id="cursor-demo" aria-hidden="true"></div>
     </div>
 </div>
 

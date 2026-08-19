@@ -194,29 +194,16 @@ body {
   margin-left: 0;
 }
 
-/* Decorative live-cursor preview. Static/illustrative only: a plain
-   <textarea> can't render another user's real cursor or selection, so this
-   doesn't track anything. Real live cursors need a richer editor (M6).
-   Both pieces sit at the same fixed line offset so the flag, caret, and
-   line tint read as one unit - "this line is where they are". */
-.cursor-flag {
-  position: absolute;
-  top: 42px;
-  left: 0;
-  height: 21px;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 10px;
-  color: var(--ink);
-  opacity: 0.85;
-  pointer-events: none;
+.presence-stack .provider-avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
+  margin-left: -8px;
+  box-shadow: 0 0 0 2px var(--paper);
 }
 
-.cursor-flag .caret {
-  width: 2px;
-  height: 14px;
-  animation: cursor-blink 1s steps(1) infinite;
+.presence-stack .provider-avatar:first-child {
+  margin-left: 0;
 }
 
 @keyframes cursor-blink {
@@ -233,9 +220,10 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  top: 42px;
+  top: 0;
   height: 21px;
   pointer-events: none;
+  background-color: color-mix(in srgb, var(--presence-you) 14%, transparent);
 }
 
 .editor-actions .btn {

@@ -331,44 +331,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Writing view: presence avatars + a decorative live-cursor preview.
-    // Mock collaborators only - there's no multi-user backend yet (M6).
-    const PRESENCE_USERS = [
-        { name: 'You', initials: 'Y', color: 'var(--presence-you)' },
-        { name: 'Ada Chen', initials: 'AC', color: 'var(--presence-2)' },
-        { name: 'Milo Reyes', initials: 'MR', color: 'var(--presence-3)' }
-    ];
-
-    const presenceStack = document.getElementById('presence-stack');
-    if (presenceStack) {
-        PRESENCE_USERS.forEach(function(user) {
-            const avatar = document.createElement('div');
-            avatar.className = 'presence-avatar';
-            avatar.style.backgroundColor = user.color;
-            avatar.textContent = user.initials;
-            avatar.title = user.name;
-            presenceStack.appendChild(avatar);
-        });
-    }
-
-    const cursorLineTint = document.getElementById('cursor-line-tint');
-    if (cursorLineTint) {
-        const demoUser = PRESENCE_USERS[1];
-        cursorLineTint.style.backgroundColor = `color-mix(in srgb, ${demoUser.color} 14%, transparent)`;
-    }
-
-    const cursorFlag = document.getElementById('cursor-demo');
-    if (cursorFlag) {
-        const demoUser = PRESENCE_USERS[1];
-        const caret = document.createElement('span');
-        caret.className = 'caret';
-        caret.style.backgroundColor = demoUser.color;
-        const label = document.createElement('span');
-        label.textContent = demoUser.name;
-        cursorFlag.appendChild(caret);
-        cursorFlag.appendChild(label);
-    }
-
     // Settings page: resolve each provider's avatar (custom URL > known-brand
     // icon via Simple Icons > initials+color fallback, same visual pattern as
     // the collaborator presence avatars).

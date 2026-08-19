@@ -107,7 +107,9 @@ app.get('/writing', requireAuth, (req, res) => {
   if (!file || file.project_id !== project.id) {
     return res.status(404).send('No file to open for this project');
   }
-  res.render('writing', { project, file });
+  const profile = userProfileRepo.get();
+  const activeProviders = providersRepo.list().filter((p) => p.activeInWorkspace);
+  res.render('writing', { project, file, profile, activeProviders });
 });
 
 app.post('/api/save-file/:fileId', requireAuth, (req, res) => {

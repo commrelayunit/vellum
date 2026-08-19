@@ -450,3 +450,59 @@ test('POST /api/providers/:id preserves activeInWorkspace when the field is omit
   assert.equal(edited.provider.activeInWorkspace, true);
   server.close();
 });
+
+test('GET /writing shows the real profile in presence, not a mock name', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Real Presence Name' })
+  });
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Presence Test' })
+  });
+  const { project } = await createRes.json();
+  const res = await fetch(`${base}/writing?project=${project.id}`, { headers: { Cookie: cookie } });
+  const body = await res.text();
+  assert.match(body, /Real Presence Name/);
+  assert.doesNotMatch(body, /Ada Chen/);
+  assert.doesNotMatch(body, /Milo Reyes/);
+  server.close();
+});
+
+test('GET /writing only shows providers marked active in the workspace', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Active Provider Test' })
+  });
+  const { project } = await createProject.json();
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Presence Provider', baseUrl: 'http://x', apiKey: 'key-xxxx' })
+  });
+  const { provider } = await createProvider.json();
+
+  const beforeToggle = await fetch(`${base}/writing?project=${project.id}`, { headers: { Cookie: cookie } });
+  assert.doesNotMatch(await beforeToggle.text(), /Presence Provider/);
+
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Presence Provider', baseUrl: 'http://x', apiKey: '', activeInWorkspace: true })
+  });
+
+  const afterToggle = await fetch(`${base}/writing?project=${project.id}`, { headers: { Cookie: cookie } });
+  assert.match(await afterToggle.text(), /Presence Provider/);
+  server.close();
+});

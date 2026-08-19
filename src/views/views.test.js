@@ -24,9 +24,33 @@ test('projects.ejs renders a project card with file details', async () => {
 test('writing.ejs renders file content with no stray whitespace', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
-    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' }
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Test Person', avatarUrl: null },
+    activeProviders: []
   });
   assert.match(html, /<textarea[^>]*>#\sHello<\/textarea>/);
+});
+
+test('writing.ejs renders real presence data, not a hardcoded mock', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Real User', avatarUrl: null },
+    activeProviders: [{ id: 1, label: 'Active Agent', avatarUrl: null }]
+  });
+  assert.match(html, /Real User/);
+  assert.match(html, /Active Agent/);
+  assert.doesNotMatch(html, /cursor-demo/);
+});
+
+test('writing.ejs renders with an empty activeProviders list', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Solo User', avatarUrl: null },
+    activeProviders: []
+  });
+  assert.match(html, /Solo User/);
 });
 
 test('settings.ejs renders a provider card with masked key and no plaintext', async () => {
