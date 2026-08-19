@@ -1,0 +1,13 @@
+services:
+  vellum:
+    build: .
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      AUTH_PASSWORD: "${AUTH_PASSWORD:?Set AUTH_PASSWORD in your environment or a .env file}"
+    volumes:
+      - vellum-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  vellum-data:
