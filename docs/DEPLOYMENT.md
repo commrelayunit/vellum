@@ -4,7 +4,7 @@ This runs Vellum as a systemd service inside an unprivileged Debian 12 LXC conta
 
 ## Quick Start
 
-For a one-command version of everything below, run `deploy/install-lxc.sh` from your Proxmox host shell (see the script's header comment for usage). The full manual walkthrough follows, for anyone who wants to understand or customize each step.
+For a one-command version of steps 1–8 below, run `deploy/install-lxc.sh` from your Proxmox host shell (see the script's header comment for usage). The one-shot install deliberately skips step 7's sample-data seeding — you'll start with an empty project list and create your first project via the "+ New project" button — and it doesn't set up step 3's Tailscale authentication or step 10's backup cron for you; the script reminds you to run `tailscale up` when it finishes, and you should still follow step 10 by hand afterwards. The full manual walkthrough follows, for anyone who wants to understand or customize each step.
 
 ## 1. Create the container
 
@@ -129,6 +129,8 @@ journalctl -u vellum -n 50 --no-pager        # expect: "Vellum server running on
 ```
 
 From another machine on your Tailnet: open `http://<vellum-tailscale-ip>:3001/login`, sign in with the password you hashed in step 6, and confirm the two seeded projects ("Sample Project", "Documentation") load, open, and save edits.
+
+(If you used `deploy/install-lxc.sh` instead of these manual steps, there's no seeded data to check — step 7's seeding is intentionally skipped by the one-shot install, so an empty project list here is expected, not a bug. Create your first project via the "+ New project" button instead.)
 
 ## 10. Backups
 

@@ -6,6 +6,15 @@ This runs Vellum in a single container, with SQLite data and secrets persisted i
 
 - Docker and Docker Compose installed.
 
+## 0. Get the code
+
+```bash
+git clone <your-repo-url> vellum
+cd vellum
+```
+
+`docker compose up -d` needs `docker-compose.yml` and the build context (this repository) to exist locally — it doesn't pull a prebuilt image.
+
 ## 1. Configure
 
 Set your login password as an environment variable, either in your shell or in a `.env` file next to `docker-compose.yml` (Docker Compose loads that file automatically for variable substitution — separate from the app's own `dotenv`-based `.env` handling, which only applies when running outside Docker):
@@ -13,6 +22,13 @@ Set your login password as an environment variable, either in your shell or in a
 ```
 AUTH_PASSWORD=your-chosen-password
 ```
+
+**Warning: if your password contains a literal `$`, a `.env` file will silently mangle it.** Compose treats `$` in `.env` values as the start of a variable reference — `AUTH_PASSWORD=my$ecret` becomes just `my` (Compose drops the undefined `$ecret` reference), and `AUTH_PASSWORD=dollar$HOME` leaks your host's `$HOME` value into the credential. If your password contains `$`, either:
+
+- write it as `$$` in the `.env` file (Compose's escape for a literal dollar sign), e.g. `AUTH_PASSWORD=my$$ecret`, or
+- set it via the shell environment instead of `.env`, e.g. `AUTH_PASSWORD='my$ecret' docker compose up -d`.
+
+You can double-check the effective value Compose will actually pass through with `docker compose config` before starting the stack.
 
 That's the only value you need to provide. `SESSION_SECRET` and `ENCRYPTION_KEY` are generated automatically on first start and saved into the same persistent volume as the database, so they survive container restarts and upgrades without any action from you.
 
@@ -31,6 +47,8 @@ curl -I http://localhost:3001/login   # expect: HTTP/1.1 200 OK
 docker compose logs vellum            # expect: "Vellum server running on http://localhost:3001"
 ```
 
+(The logs will also show a few lines of `express-session`'s standard `MemoryStore is not designed for a production environment...` warning before that line — this is pre-existing application behavior, not something specific to the Docker path, and not a sign anything is broken.)
+
 Visit `http://localhost:3001` and sign in with your `AUTH_PASSWORD`.
 
 ## Changing the port
@@ -39,13 +57,35 @@ Visit `http://localhost:3001` and sign in with your `AUTH_PASSWORD`.
 PORT=8080 docker compose up -d
 ```
 
+## Exposing beyond localhost
+
+By default `docker-compose.yml` publishes the app on `127.0.0.1` only — it's reachable from the host machine itself but not from your LAN or the internet, matching the private-by-default posture used elsewhere in this project (see [docs/DEPLOYMENT.md](DEPLOYMENT.md#3-private-network-access) for why the LXC path uses Tailscale instead of a public port).
+
+If you want it reachable elsewhere, you have a few options:
+
+- **LAN/all interfaces:** change the port mapping in `docker-compose.yml` from `"127.0.0.1:${PORT:-3001}:3001"` to `"${PORT:-3001}:3001"` and re-run `docker compose up -d`. This exposes the app, with no built-in TLS or additional auth beyond the single `AUTH_PASSWORD`, on every network interface on the host.
+- **Tailscale:** run Tailscale on the host itself and reach the container via the host's Tailscale IP and the localhost-bound port — no compose changes needed.
+- **Reverse proxy:** put nginx, Caddy, or similar in front, forwarding to `127.0.0.1:3001`, and let the proxy handle TLS/auth/access control.
+
+## Changing the password / a note on AUTH_PASSWORD
+
+The plaintext `AUTH_PASSWORD` is visible for as long as the container exists — via `docker inspect`, `/proc/1/environ` inside the container, and your on-disk `.env` file. This differs from the LXC path, which only ever stores the bcrypt hash, never the plaintext. Keep your `.env` file's permissions and access as tight as you would any other credentials file.
+
+To change the password, edit `AUTH_PASSWORD` in `.env` and run `docker compose up -d` again. `AUTH_PASSWORD_HASH` isn't persisted anywhere (only `SESSION_SECRET` and `ENCRYPTION_KEY` are saved into the volume's secrets file), so the entrypoint re-hashes `AUTH_PASSWORD` on every container start — the new password takes effect on the next boot without any extra steps.
+
 ## Backups
 
-The named volume holds both the SQLite database and the generated secrets file (`.secrets.env`) — back up the whole volume together, not just the database, for the same reason described in [docs/DEPLOYMENT.md](DEPLOYMENT.md#10-backups): the database alone can't be decrypted without the matching `ENCRYPTION_KEY`. Find your volume's actual name with `docker volume ls` (Compose prefixes it with your project directory name, e.g. `vellum_vellum-data`), then:
+The named volume holds both the SQLite database and the generated secrets file (`.secrets.env`) — back up the whole volume together, not just the database, for the same reason described in [docs/DEPLOYMENT.md](DEPLOYMENT.md#10-backups): the database alone can't be decrypted without the matching `ENCRYPTION_KEY`.
+
+**Stop the container before backing up.** The database runs in SQLite's WAL mode, so `vellum.db`, `vellum.db-shm`, and `vellum.db-wal` can all be mid-write at once while the container is running — tarring them live can produce a snapshot that won't restore cleanly. Stopping first guarantees a clean, consistent copy at the cost of a brief outage:
 
 ```bash
+docker compose stop
+docker volume ls   # find your volume's actual name — Compose prefixes it with your project
+                    # directory name, e.g. vellum_vellum-data
 docker run --rm -v <volume-name>:/data -v "$(pwd)":/backup debian:bookworm-slim \
   tar czf /backup/vellum-data-backup.tar.gz -C /data .
+docker compose start
 ```
 
 ## Upgrading
