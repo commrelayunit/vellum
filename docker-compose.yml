@@ -2,7 +2,7 @@ services:
   vellum:
     build: .
     ports:
-      - "${PORT:-3001}:3001"
+      - "127.0.0.1:${PORT:-3001}:3001"
     environment:
       AUTH_PASSWORD: "${AUTH_PASSWORD:?Set AUTH_PASSWORD in your environment or a .env file}"
     volumes:

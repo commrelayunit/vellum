@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 DATA_DIR="$(dirname "$DB_PATH")"
 SECRETS_FILE="$DATA_DIR/.secrets.env"
@@ -23,4 +24,4 @@ if [ -z "${AUTH_PASSWORD_HASH:-}" ] && [ -n "${AUTH_PASSWORD:-}" ]; then
   export AUTH_PASSWORD_HASH="$(node src/scripts/hash-password.js "$AUTH_PASSWORD")"
 fi
 
-exec node src/server.js
+exec "$@"
