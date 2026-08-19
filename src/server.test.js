@@ -337,3 +337,48 @@ test('unauthenticated POST /api/providers/:id/delete redirects to /login', async
   assert.equal(res.headers.get('location'), '/login');
   server.close();
 });
+
+test('POST /api/profile updates label and avatarUrl', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Velitchko', avatarUrl: 'https://example.com/me.png' })
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.equal(data.profile.label, 'Velitchko');
+  assert.equal(data.profile.avatarUrl, 'https://example.com/me.png');
+  server.close();
+});
+
+test('POST /api/profile rejects an empty label', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: '' })
+  });
+  assert.equal(res.status, 400);
+  server.close();
+});
+
+test('unauthenticated POST /api/profile redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label: 'x' }),
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  server.close();
+});

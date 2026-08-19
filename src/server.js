@@ -11,6 +11,7 @@ const { createProjectsRepo } = require('./db/projects');
 const { createFilesRepo } = require('./db/files');
 const { createSecretsService } = require('./crypto/secrets');
 const { createProvidersRepo } = require('./db/providers');
+const { createUserProfileRepo } = require('./db/user-profile');
 const { requireAuth, verifyPassword } = require('./auth/middleware');
 
 const db = createConnection(config.dbPath);
@@ -19,6 +20,7 @@ const projectsRepo = createProjectsRepo(db);
 const filesRepo = createFilesRepo(db);
 const secrets = createSecretsService(config.encryptionKey);
 const providersRepo = createProvidersRepo(db, secrets);
+const userProfileRepo = createUserProfileRepo(db);
 
 const app = express();
 
@@ -179,6 +181,18 @@ app.post('/api/providers/:id/delete', requireAuth, (req, res) => {
   } else {
     res.status(404).json({ success: false, message: 'Provider not found' });
   }
+});
+
+app.post('/api/profile', requireAuth, (req, res) => {
+  const { label, avatarUrl } = req.body;
+  if (typeof label !== 'string' || !label.trim()) {
+    return res.status(400).json({ success: false, message: 'Label is required' });
+  }
+  const profile = userProfileRepo.update({
+    label: label.trim(),
+    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null
+  });
+  res.json({ success: true, profile });
 });
 
 if (process.env.NODE_ENV === 'production') {
