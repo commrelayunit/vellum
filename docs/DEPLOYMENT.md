@@ -2,6 +2,10 @@
 
 This runs Vellum as a systemd service inside an unprivileged Debian 12 LXC container, with SQLite data stored outside the app directory.
 
+## Quick Start
+
+For a one-command version of everything below, run `deploy/install-lxc.sh` from your Proxmox host shell (see the script's header comment for usage). The full manual walkthrough follows, for anyone who wants to understand or customize each step.
+
 ## 1. Create the container
 
 From the Proxmox host shell (adjust `100` to a free VMID and `local-lvm`/bridge names to match your setup):

@@ -87,7 +87,8 @@ The MVP follows the implementation plan with these components:
 
 ## Deployment
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full Proxmox LXC setup (container creation, Tailscale, systemd service, backups, upgrades).
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Proxmox LXC setup (container creation, Tailscale, systemd service, backups, upgrades), or run `deploy/install-lxc.sh` for a one-command version of the same steps.
+- [docs/DOCKER.md](docs/DOCKER.md) — run Vellum in a single Docker container.
 
 ## Status
 
