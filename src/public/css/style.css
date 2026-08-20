@@ -674,7 +674,8 @@ body {
   flex: 1;
 }
 
-.provider-form input {
+.provider-form input,
+.provider-form select {
   background: none;
   border: none;
   font-family: inherit;

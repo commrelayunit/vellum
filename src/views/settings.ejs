@@ -33,7 +33,7 @@
 
     <div class="projects-list" id="providers-list">
         <% providers.forEach(provider => { %>
-            <div class="provider-card" data-provider-id="<%= provider.id %>" data-label="<%= provider.label %>" data-base-url="<%= provider.baseUrl %>" data-default-model="<%= provider.defaultModel || '' %>" data-avatar-url="<%= provider.avatarUrl || '' %>">
+            <div class="provider-card" data-provider-id="<%= provider.id %>" data-label="<%= provider.label %>" data-base-url="<%= provider.baseUrl %>" data-default-model="<%= provider.defaultModel || '' %>" data-default-reasoning-effort="<%= provider.defaultReasoningEffort || '' %>" data-avatar-url="<%= provider.avatarUrl || '' %>">
                 <div class="provider-avatar" data-avatar-target data-label="<%= provider.label %>" <% if (provider.avatarUrl) { %>data-avatar-url="<%= provider.avatarUrl %>"<% } %>></div>
                 <div class="project-info">
                     <h3><%= provider.label %></h3>

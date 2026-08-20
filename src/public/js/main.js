@@ -480,6 +480,20 @@ document.addEventListener('DOMContentLoaded', function() {
             defaultModelInput.autocomplete = 'off';
             defaultModelInput.value = existing ? existing.defaultModel : '';
 
+            const reasoningEffortSelect = document.createElement('select');
+            [
+                { value: '', label: 'Reasoning effort: none' },
+                { value: 'low', label: 'Reasoning effort: low' },
+                { value: 'medium', label: 'Reasoning effort: medium' },
+                { value: 'high', label: 'Reasoning effort: high' }
+            ].forEach(function(opt) {
+                const optionEl = document.createElement('option');
+                optionEl.value = opt.value;
+                optionEl.textContent = opt.label;
+                reasoningEffortSelect.appendChild(optionEl);
+            });
+            reasoningEffortSelect.value = existing ? (existing.defaultReasoningEffort || '') : '';
+
             const avatarUrlInput = document.createElement('input');
             avatarUrlInput.type = 'text';
             avatarUrlInput.placeholder = 'Avatar image URL (optional)';
@@ -523,6 +537,7 @@ document.addEventListener('DOMContentLoaded', function() {
             form.appendChild(baseUrlInput);
             form.appendChild(apiKeyInput);
             form.appendChild(defaultModelInput);
+            form.appendChild(reasoningEffortSelect);
             form.appendChild(avatarUrlInput);
             form.appendChild(actions);
             form.appendChild(errorEl);
@@ -536,6 +551,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     baseUrl: baseUrlInput.value.trim(),
                     apiKey: apiKeyInput.value.trim(),
                     defaultModel: defaultModelInput.value.trim(),
+                    defaultReasoningEffort: reasoningEffortSelect.value,
                     avatarUrl: avatarUrlInput.value.trim()
                 };
                 const url = existing ? `/api/providers/${existing.id}` : '/api/providers';
@@ -589,6 +605,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     label: card.dataset.label,
                     baseUrl: card.dataset.baseUrl,
                     defaultModel: card.dataset.defaultModel,
+                    defaultReasoningEffort: card.dataset.defaultReasoningEffort,
                     avatarUrl: card.dataset.avatarUrl
                 };
                 const info = card.querySelector('.project-info');

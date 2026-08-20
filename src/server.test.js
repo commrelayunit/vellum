@@ -715,3 +715,53 @@ test('unauthenticated POST /api/chat/:fileId/messages redirects to /login', asyn
   assert.equal(res.status, 302);
   server.close();
 });
+
+test('POST /api/providers persists defaultReasoningEffort', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Effort Test', baseUrl: 'http://x', apiKey: 'key-vvvv', defaultReasoningEffort: 'medium' })
+  });
+  const { provider } = await res.json();
+  assert.equal(provider.defaultReasoningEffort, 'medium');
+  server.close();
+});
+
+test('GET /settings renders the reasoning effort field for editing', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Effort Render Test', baseUrl: 'http://x', apiKey: 'key-uuuu', defaultReasoningEffort: 'high' })
+  });
+  const res = await fetch(`${base}/settings`, { headers: { Cookie: cookie } });
+  const body = await res.text();
+  assert.match(body, /data-default-reasoning-effort="high"/);
+  server.close();
+});
+
+test('POST /api/providers/:id preserves defaultReasoningEffort when the field is omitted (e.g. the active-in-workspace quick-toggle)', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Toggle Preserve Test', baseUrl: 'http://x', apiKey: 'key-tttt', defaultReasoningEffort: 'medium' })
+  });
+  const { provider } = await createRes.json();
+
+  // Mirrors the quick-toggle button's payload, which never sends defaultReasoningEffort.
+  const toggleRes = await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Toggle Preserve Test', baseUrl: 'http://x', apiKey: '', defaultModel: '', avatarUrl: '', activeInWorkspace: true })
+  });
+  const toggled = await toggleRes.json();
+  assert.equal(toggled.provider.defaultReasoningEffort, 'medium');
+  server.close();
+});

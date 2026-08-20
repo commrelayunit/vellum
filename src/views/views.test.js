@@ -80,3 +80,11 @@ test('settings.ejs renders the user profile card', async () => {
   assert.match(html, /Test Person/);
   assert.match(html, /data-skip-brand-lookup="true"/);
 });
+
+test('settings.ejs renders a provider card with its reasoning effort data attribute', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'settings.ejs'), {
+    providers: [{ id: 1, label: 'Test', baseUrl: 'http://x', maskedKey: '•••• aaaa', defaultModel: null, avatarUrl: null, activeInWorkspace: false, defaultReasoningEffort: 'low' }],
+    profile: { label: 'Test Person', avatarUrl: null }
+  });
+  assert.match(html, /data-default-reasoning-effort="low"/);
+});

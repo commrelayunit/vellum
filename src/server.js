@@ -137,7 +137,7 @@ app.get('/settings', requireAuth, (req, res) => {
 });
 
 app.post('/api/providers', requireAuth, (req, res) => {
-  const { label, baseUrl, apiKey, defaultModel, avatarUrl } = req.body;
+  const { label, baseUrl, apiKey, defaultModel, avatarUrl, defaultReasoningEffort } = req.body;
   if (typeof label !== 'string' || !label.trim()) {
     return res.status(400).json({ success: false, message: 'Label is required' });
   }
@@ -152,14 +152,15 @@ app.post('/api/providers', requireAuth, (req, res) => {
     baseUrl: baseUrl.trim(),
     apiKey: apiKey.trim(),
     defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
-    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null
+    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
+    defaultReasoningEffort: typeof defaultReasoningEffort === 'string' && defaultReasoningEffort.trim() ? defaultReasoningEffort.trim() : null
   });
   res.status(201).json({ success: true, provider });
 });
 
 app.post('/api/providers/:id', requireAuth, (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { label, baseUrl, apiKey, defaultModel, avatarUrl, activeInWorkspace } = req.body;
+  const { label, baseUrl, apiKey, defaultModel, avatarUrl, activeInWorkspace, defaultReasoningEffort } = req.body;
   if (typeof label !== 'string' || !label.trim()) {
     return res.status(400).json({ success: false, message: 'Label is required' });
   }
@@ -176,7 +177,8 @@ app.post('/api/providers/:id', requireAuth, (req, res) => {
     apiKey: typeof apiKey === 'string' ? apiKey.trim() : '',
     defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
     avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
-    activeInWorkspace: typeof activeInWorkspace === 'boolean' ? activeInWorkspace : existing.activeInWorkspace
+    activeInWorkspace: typeof activeInWorkspace === 'boolean' ? activeInWorkspace : existing.activeInWorkspace,
+    defaultReasoningEffort: typeof defaultReasoningEffort === 'string' ? (defaultReasoningEffort.trim() || null) : existing.defaultReasoningEffort
   });
   res.json({ success: true, provider });
 });
