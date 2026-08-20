@@ -7,11 +7,11 @@ const { migrate } = require('./schema');
 const { createProvidersRepo } = require('./providers');
 const { createSecretsService } = require('../crypto/secrets');
 
-test('migrate creates the projects, files, ai_providers, and user_profile tables', () => {
+test('migrate creates the projects, files, ai_providers, user_profile, and chat_messages tables', () => {
   const db = createConnection(':memory:');
   migrate(db);
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
-  assert.deepEqual(tables, ['ai_providers', 'files', 'projects', 'schema_migrations', 'user_profile']);
+  assert.deepEqual(tables, ['ai_providers', 'chat_messages', 'files', 'projects', 'schema_migrations', 'user_profile']);
   db.close();
 });
 
@@ -20,7 +20,7 @@ test('migrate records each migration exactly once, even when called twice', () =
   migrate(db);
   migrate(db);
   const applied = db.prepare('SELECT id FROM schema_migrations').all().map((r) => r.id);
-  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace']);
+  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace', '0004_chat_messages']);
   db.close();
 });
 
@@ -30,6 +30,7 @@ test('a migration already recorded as applied is genuinely skipped, not just ide
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0001_baseline')").run();
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0002_user_profile')").run();
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0003_provider_active_in_workspace')").run();
+  db.prepare("INSERT INTO schema_migrations (id) VALUES ('0004_chat_messages')").run();
   migrate(db);
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
   assert.deepEqual(tables, ['schema_migrations']);
@@ -46,9 +47,6 @@ test('migrate seeds a default user_profile row', () => {
 
 test('a migration adding a column to an existing table never touches existing rows in it', () => {
   const db = createConnection(':memory:');
-  // Simulate a real, already-running database that only has migrations
-  // 0001 and 0002 applied - i.e. an install from before this task shipped,
-  // with real data already in it.
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')));
     CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, description TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
