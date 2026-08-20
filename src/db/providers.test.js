@@ -131,3 +131,21 @@ test('create() and update() persist activeInWorkspace as a real boolean', () => 
   });
   assert.equal(updated.activeInWorkspace, false);
 });
+
+test('create() and update() persist defaultReasoningEffort, defaulting to null', () => {
+  const { providers } = setup();
+  const created = providers.create({ label: 'A', baseUrl: 'http://a', apiKey: 'key-aaaa' });
+  assert.equal(created.defaultReasoningEffort, null);
+  const withEffort = providers.create({ label: 'B', baseUrl: 'http://b', apiKey: 'key-bbbb', defaultReasoningEffort: 'high' });
+  assert.equal(withEffort.defaultReasoningEffort, 'high');
+  const updated = providers.update(withEffort.id, {
+    label: 'B', baseUrl: 'http://b', apiKey: '', defaultModel: null, avatarUrl: null, activeInWorkspace: false, defaultReasoningEffort: 'low'
+  });
+  assert.equal(updated.defaultReasoningEffort, 'low');
+});
+
+test('getDecryptedApiKey() returns the real plaintext key, not the masked version', () => {
+  const { providers } = setup();
+  const created = providers.create({ label: 'A', baseUrl: 'http://a', apiKey: 'sk-real-secret-key' });
+  assert.equal(providers.getDecryptedApiKey(created.id), 'sk-real-secret-key');
+});
