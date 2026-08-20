@@ -616,6 +616,58 @@ test('POST /api/chat/:fileId/messages persists a role:"error" message when the p
   server.close();
 });
 
+test('POST /api/chat/:fileId/messages survives a synchronous non-Error throw from the completion service without crashing the process', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Non-Error Throw Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Non-Error Provider', baseUrl: 'http://fake', apiKey: 'key-vvvv' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Non-Error Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  // Synchronous throw of a plain string (not an Error instance). Inside an
+  // async handler this becomes a rejected promise either way, but it
+  // exercises the `err.message` guard added to the fix (a non-Error value
+  // has no .message) and, combined with the follow-up request below,
+  // proves the process is still alive and serving requests afterward.
+  app.locals.chatCompletionService = {
+    complete: () => { throw 'boom, not an Error instance'; }
+  };
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Trigger a weird throw' })
+  });
+  const body = await res.text();
+  assert.match(body, /"type":"error"/);
+  assert.match(body, /boom, not an Error instance/);
+
+  const historyRes = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  const { messages } = await historyRes.json();
+  assert.equal(messages[1].role, 'error');
+
+  // Prove the server process is still alive and responsive after the throw,
+  // rather than having crashed on an unhandled rejection.
+  const followUp = await fetch(`${base}/projects`, { headers: { Cookie: cookie } });
+  assert.equal(followUp.status, 200);
+
+  server.close();
+});
+
 test('POST /api/chat/:fileId/messages rejects a provider that is not active in the workspace', async () => {
   const server = await listen();
   const { port } = server.address();

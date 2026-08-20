@@ -213,27 +213,44 @@ app.get('/api/chat/:fileId/messages', requireAuth, (req, res) => {
 });
 
 app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
-  const fileId = parseInt(req.params.fileId, 10);
-  const file = filesRepo.getById(fileId);
-  if (!file) {
-    return res.status(404).json({ success: false, message: 'File not found' });
-  }
-  const { providerId, message } = req.body;
-  if (typeof message !== 'string' || !message.trim()) {
-    return res.status(400).json({ success: false, message: 'Message is required' });
-  }
-  const provider = providersRepo.getById(parseInt(providerId, 10));
-  if (!provider || !provider.activeInWorkspace) {
-    return res.status(400).json({ success: false, message: 'Provider is not active in this workspace' });
-  }
+  // Everything in this block runs before any SSE headers are set, so on
+  // failure we can still respond with a normal JSON error. This section is
+  // guarded because Express 4 does not catch synchronous throws or promise
+  // rejections from async handlers — an uncaught one here (e.g. a
+  // SQLITE_BUSY error from a sync better-sqlite3 call) would otherwise
+  // crash the whole process.
+  let file;
+  let provider;
+  let trimmedMessage;
+  let history;
+  try {
+    const fileId = parseInt(req.params.fileId, 10);
+    file = filesRepo.getById(fileId);
+    if (!file) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+    const { providerId, message } = req.body;
+    if (typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ success: false, message: 'Message is required' });
+    }
+    provider = providersRepo.getById(parseInt(providerId, 10));
+    if (!provider || !provider.activeInWorkspace) {
+      return res.status(400).json({ success: false, message: 'Provider is not active in this workspace' });
+    }
 
-  const trimmedMessage = message.trim();
-  chatMessagesRepo.create({ fileId, role: 'user', content: trimmedMessage });
-  const history = chatMessagesRepo.listForFile(fileId).slice(0, -1);
+    trimmedMessage = message.trim();
+    chatMessagesRepo.create({ fileId: file.id, role: 'user', content: trimmedMessage });
+    history = chatMessagesRepo.listForFile(file.id).slice(0, -1);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
 
+  // From here on, headers are already committed to SSE, so any failure
+  // (including a non-Error throw/rejection from the completion service)
+  // must be turned into an SSE error frame rather than left unhandled.
   try {
     const apiKey = providersRepo.getDecryptedApiKey(provider.id);
     const fullText = await req.app.locals.chatCompletionService.complete({
@@ -247,15 +264,26 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
       userMessage: trimmedMessage,
       onDelta: (delta) => writeSseEvent(res, { type: 'delta', text: delta })
     });
-    chatMessagesRepo.create({ fileId, role: 'assistant', content: fullText, providerLabel: provider.label });
+    chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label });
     writeSseEvent(res, { type: 'done' });
-    res.end();
   } catch (err) {
-    const errorText = `Request failed: ${err.message}`;
-    chatMessagesRepo.create({ fileId, role: 'error', content: errorText });
-    writeSseEvent(res, { type: 'error', message: errorText });
-    res.end();
+    const errorText = `Request failed: ${err && err.message ? err.message : String(err)}`;
+    // Persisting the error row is itself a DB call that could throw (e.g.
+    // SQLITE_BUSY) while we're already handling a failure; guard it
+    // separately so it can never prevent res.end() from running below.
+    try {
+      chatMessagesRepo.create({ fileId: file.id, role: 'error', content: errorText });
+    } catch (persistErr) {
+      console.error('Failed to persist chat error message:', persistErr);
+    }
+    try {
+      writeSseEvent(res, { type: 'error', message: errorText });
+    } catch (writeErr) {
+      console.error('Failed to write SSE error frame:', writeErr);
+    }
   }
+
+  res.end();
 });
 
 if (process.env.NODE_ENV === 'production') {
