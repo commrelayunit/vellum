@@ -148,42 +148,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Chat functionality with Enter key support
+    // Chat functionality: real streaming completions, per-file history
     const chatInput = document.getElementById('chat-input');
     const sendChatBtn = document.getElementById('send-chat-btn');
     const chatMessages = document.querySelector('.chat-messages');
-    
-    if (chatInput && sendChatBtn && chatMessages) {
-        function sendMessage() {
-            const message = chatInput.value.trim();
-            if (message) {
-                addMessage('You', message, true);
-                chatInput.value = '';
-                
-                // Simulate agent response after a short delay
-                setTimeout(() => {
-                    addMessage('Agent', 'I\'ve received your message. How can I help you with this file?', false);
-                }, 1000);
-            }
-        }
-        
-        // Send on button click
-        sendChatBtn.addEventListener('click', sendMessage);
-        
-        // Send on Enter key press (with Ctrl modifier for clarity)
-        chatInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault(); // Prevent default form submission
-                sendMessage();
-            }
-        });
-        
-        function addMessage(author, content, isUser) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? '' : 'agent-message'}`;
+    const chatProviderSelect = document.getElementById('chat-provider-select');
+    const editorForChat = document.getElementById('markdown-editor');
 
-            const now = new Date();
-            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (chatInput && sendChatBtn && chatMessages && editorForChat) {
+        const fileId = editorForChat.dataset.fileId;
+
+        function formatTime(isoString) {
+            const date = isoString ? new Date(isoString) : new Date();
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function addMessage(author, content, className, timeString) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${className || ''}`;
 
             const authorDiv = document.createElement('div');
             authorDiv.className = 'message-author';
@@ -195,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
-            timeDiv.textContent = timeString;
+            timeDiv.textContent = timeString || formatTime();
 
             messageDiv.appendChild(authorDiv);
             messageDiv.appendChild(contentDiv);
@@ -203,7 +185,94 @@ document.addEventListener('DOMContentLoaded', function() {
 
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+            return contentDiv;
         }
+
+        function loadHistory() {
+            fetch(`/api/chat/${fileId}/messages`)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (!data.success) return;
+                    data.messages.forEach(function(message) {
+                        if (message.role === 'user') {
+                            addMessage('You', message.content, '', formatTime(message.createdAt));
+                        } else if (message.role === 'assistant') {
+                            addMessage(message.providerLabel || 'Agent', message.content, 'agent-message', formatTime(message.createdAt));
+                        } else {
+                            addMessage('Error', message.content, 'error-message', formatTime(message.createdAt));
+                        }
+                    });
+                });
+        }
+
+        function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message || !chatProviderSelect) return;
+
+            addMessage('You', message, '');
+            chatInput.value = '';
+            chatInput.disabled = true;
+            sendChatBtn.disabled = true;
+
+            const providerId = chatProviderSelect.value;
+            const providerLabel = chatProviderSelect.options[chatProviderSelect.selectedIndex].textContent;
+            let replyContentEl = null;
+
+            fetch(`/api/chat/${fileId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ providerId, message })
+            })
+            .then(function(response) {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                function readChunk() {
+                    return reader.read().then(function(result) {
+                        if (result.done) return;
+                        buffer += decoder.decode(result.value, { stream: true });
+                        const events = buffer.split('\n\n');
+                        buffer = events.pop();
+                        events.forEach(function(eventText) {
+                            if (!eventText.startsWith('data: ')) return;
+                            const payload = JSON.parse(eventText.slice(6));
+                            if (payload.type === 'delta') {
+                                if (!replyContentEl) {
+                                    replyContentEl = addMessage(providerLabel, '', 'agent-message');
+                                }
+                                replyContentEl.textContent += payload.text;
+                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                            } else if (payload.type === 'error') {
+                                addMessage('Error', payload.message, 'error-message');
+                            }
+                        });
+                        return readChunk();
+                    });
+                }
+
+                return readChunk();
+            })
+            .catch(function() {
+                addMessage('Error', 'Could not reach the server — check your connection and try again.', 'error-message');
+            })
+            .then(function() {
+                chatInput.disabled = false;
+                sendChatBtn.disabled = false;
+                chatInput.focus();
+            });
+        }
+
+        sendChatBtn.addEventListener('click', sendMessage);
+
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        loadHistory();
     }
     
     // Simple markdown to HTML converter

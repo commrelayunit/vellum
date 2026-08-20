@@ -389,6 +389,23 @@ body {
   opacity: 0.5;
 }
 
+.message.error-message .message-content {
+  font-weight: bold;
+}
+
+#chat-provider-select {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  margin-right: 0.5rem;
+}
+
+#chat-input:disabled {
+  opacity: 0.5;
+}
+
 .chat-input {
   display: flex;
   padding: 0.5rem;

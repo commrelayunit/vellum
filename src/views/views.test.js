@@ -53,6 +53,30 @@ test('writing.ejs renders with an empty activeProviders list', async () => {
   assert.match(html, /Solo User/);
 });
 
+test('writing.ejs renders a provider selector when providers are active', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Real User', avatarUrl: null },
+    activeProviders: [{ id: 7, label: 'Active Agent', avatarUrl: null }]
+  });
+  assert.match(html, /id="chat-provider-select"/);
+  assert.match(html, /<option value="7">Active Agent<\/option>/);
+  assert.doesNotMatch(html, /id="chat-input"[^>]*disabled/);
+});
+
+test('writing.ejs disables chat input when no providers are active', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Solo User', avatarUrl: null },
+    activeProviders: []
+  });
+  assert.doesNotMatch(html, /id="chat-provider-select"/);
+  assert.match(html, /id="chat-input"[^>]*disabled/);
+  assert.match(html, /id="send-chat-btn"[^>]*disabled/);
+});
+
 test('settings.ejs renders a provider card with masked key and no plaintext', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'settings.ejs'), {
     providers: [

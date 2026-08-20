@@ -37,27 +37,23 @@
 <div class="chat-panel" id="chat-panel">
     <div class="chat-header">
         <h3>Chat</h3>
+        <% if (activeProviders.length > 0) { %>
+            <select id="chat-provider-select" aria-label="Choose provider">
+                <% activeProviders.forEach(function(provider) { %>
+                    <option value="<%= provider.id %>"><%= provider.label %></option>
+                <% }); %>
+            </select>
+        <% } %>
         <button class="toggle-chat" id="toggle-chat" aria-label="Collapse chat" aria-expanded="true" title="Collapse chat">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M9 6l6 6-6 6"/>
             </svg>
         </button>
     </div>
-    <div class="chat-messages">
-        <div class="message">
-            <div class="message-author">You</div>
-            <div class="message-content">I'm working on the <%= file.path %> file. Can you help me improve the introduction?</div>
-            <div class="message-time">Just now</div>
-        </div>
-        <div class="message agent-message">
-            <div class="message-author">Agent</div>
-            <div class="message-content">Sure! I can help you rewrite that introduction to be more engaging. What specific aspects would you like to improve?</div>
-            <div class="message-time">Just now</div>
-        </div>
-    </div>
+    <div class="chat-messages"></div>
     <div class="chat-input">
-        <input type="text" placeholder="Ask about this file..." id="chat-input">
-        <button class="btn btn-primary" id="send-chat-btn" aria-label="Send message" title="Send">
+        <input type="text" placeholder="<% if (activeProviders.length > 0) { %>Ask about this file...<% } else { %>Activate a provider in Settings to chat<% } %>" id="chat-input" <% if (activeProviders.length === 0) { %>disabled<% } %>>
+        <button class="btn btn-primary" id="send-chat-btn" aria-label="Send message" title="Send" <% if (activeProviders.length === 0) { %>disabled<% } %>>
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M22 2L11 13"/>
                 <path d="M22 2l-7 20-4-9-9-4 20-7z"/>
