@@ -242,13 +242,22 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
 
     trimmedMessage = message.trim();
     chatMessagesRepo.create({ fileId: file.id, role: 'user', content: trimmedMessage });
-    history = chatMessagesRepo.listForFile(file.id).slice(0, -1);
+    // Cap history sent to the model to the last 40 prior messages, excluding
+    // the user message just inserted above (slice(-41, -1): drop the last
+    // element, then keep at most 40 before it), so a long-lived conversation
+    // can't grow unbounded and eventually exceed the model's context window.
+    history = chatMessagesRepo.listForFile(file.id).slice(-41, -1);
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
+  // Without this, a deployer following docs/DOCKER.md's nginx reverse-proxy
+  // path (proxy_buffering on by default) gets the whole stream buffered and
+  // delivered as one blob at the end, defeating the point of streaming.
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
 
   // From here on, headers are already committed to SSE, so any failure
   // (including a non-Error throw/rejection from the completion service)

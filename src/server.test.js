@@ -695,6 +695,115 @@ test('POST /api/chat/:fileId/messages rejects a provider that is not active in t
   server.close();
 });
 
+test('POST /api/chat/:fileId/messages sets X-Accel-Buffering: no so a proxying nginx does not buffer the stream', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Buffering Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Buffering Provider', baseUrl: 'http://fake', apiKey: 'key-bbbb' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Buffering Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  app.locals.chatCompletionService = {
+    complete: async ({ onDelta }) => {
+      onDelta('Hi');
+      return 'Hi';
+    }
+  };
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Ping' })
+  });
+  await res.text();
+  assert.equal(res.headers.get('x-accel-buffering'), 'no');
+  server.close();
+});
+
+test('POST /api/chat/:fileId/messages caps the history sent to the completion service to the last 40 prior messages', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat History Cap Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'History Cap Provider', baseUrl: 'http://fake', apiKey: 'key-cccc' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'History Cap Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  // Build up 41 rounds of (user message, assistant reply) — 82 persisted
+  // messages — well past the 40-message cap, before sending the request
+  // whose history we actually inspect below.
+  const ROUNDS = 41;
+  for (let i = 1; i <= ROUNDS; i++) {
+    app.locals.chatCompletionService = {
+      complete: async ({ onDelta }) => {
+        onDelta(`Reply ${i}`);
+        return `Reply ${i}`;
+      }
+    };
+    // eslint-disable-next-line no-await-in-loop
+    const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ providerId: provider.id, message: `Msg ${i}` })
+    });
+    // eslint-disable-next-line no-await-in-loop
+    await res.text();
+  }
+
+  let capturedHistory = null;
+  app.locals.chatCompletionService = {
+    complete: async ({ history, onDelta }) => {
+      capturedHistory = history;
+      onDelta('Final reply');
+      return 'Final reply';
+    }
+  };
+
+  const finalRes = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'One more message' })
+  });
+  await finalRes.text();
+
+  assert.ok(capturedHistory);
+  assert.equal(capturedHistory.length, 40);
+  // The just-inserted user message ("One more message") must not be part of
+  // history (it's passed separately as userMessage), and the oldest rounds
+  // (1-21) must have been dropped by the cap, leaving round 22 onward.
+  assert.equal(capturedHistory[0].content, 'Msg 22');
+  assert.equal(capturedHistory[capturedHistory.length - 1].content, 'Reply 41');
+  assert.ok(!capturedHistory.some((m) => m.content === 'One more message'));
+  server.close();
+});
+
 test('unauthenticated GET /api/chat/:fileId/messages redirects to /login', async () => {
   const server = await listen();
   const { port } = server.address();

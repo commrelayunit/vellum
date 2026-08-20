@@ -202,7 +202,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             addMessage('Error', message.content, 'error-message', formatTime(message.createdAt));
                         }
                     });
+                })
+                .catch(function() {
+                    addMessage('Error', 'Your session expired — reload the page and sign in again.', 'error-message');
                 });
+        }
+
+        // A POST to /api/chat/:fileId/messages is only usable as an SSE
+        // stream if the server actually sent one. If express-session's
+        // in-memory store lost the session (e.g. after a server restart —
+        // there's no cookie.maxAge, so this is routine), requireAuth
+        // redirects to /login; fetch's default redirect:'follow' silently
+        // re-issues that as a GET and resolves with a 200 OK HTML login
+        // page, which looks like success unless we check for it explicitly.
+        function isSseResponse(response) {
+            if (response.redirected) return false;
+            const contentType = response.headers.get('Content-Type') || '';
+            return contentType.indexOf('text/event-stream') !== -1;
         }
 
         function sendMessage() {
@@ -224,6 +240,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({ providerId, message })
             })
             .then(function(response) {
+                if (!isSseResponse(response)) {
+                    // Not a real SSE stream — most likely a dead session
+                    // redirected to the login page, or a JSON validation
+                    // error (400/404) from before headers were committed to
+                    // SSE. Try to recover a real message from JSON; if that
+                    // also fails (e.g. it's the login page's HTML), fall
+                    // back to a generic "session expired" message.
+                    return response.json()
+                        .then(function(data) {
+                            addMessage('Error', (data && data.message) || 'Something went wrong.', 'error-message');
+                        })
+                        .catch(function() {
+                            addMessage('Error', 'Your session expired — reload the page and sign in again.', 'error-message');
+                        });
+                }
+
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
