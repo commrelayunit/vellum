@@ -1035,6 +1035,27 @@ test('GET /settings renders the reasoning effort field for editing', async () =>
   assert.match(body, /data-default-reasoning-effort="high"/);
   server.close();
 });
+
+test('POST /api/providers/:id preserves defaultReasoningEffort when the field is omitted (e.g. the active-in-workspace quick-toggle)', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Toggle Preserve Test', baseUrl: 'http://x', apiKey: 'key-tttt', defaultReasoningEffort: 'medium' })
+  });
+  const { provider } = await createRes.json();
+
+  // Mirrors the quick-toggle button's payload, which never sends defaultReasoningEffort.
+  const toggleRes = await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Toggle Preserve Test', baseUrl: 'http://x', apiKey: '', defaultModel: '', avatarUrl: '', activeInWorkspace: true })
+  });
+  const toggled = await toggleRes.json();
+  assert.equal(toggled.provider.defaultReasoningEffort, 'medium');
+  server.close();
+});
 ```
 
 Add to `src/views/views.test.js`:
@@ -1105,11 +1126,13 @@ app.post('/api/providers/:id', requireAuth, (req, res) => {
     defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
     avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
     activeInWorkspace: typeof activeInWorkspace === 'boolean' ? activeInWorkspace : existing.activeInWorkspace,
-    defaultReasoningEffort: typeof defaultReasoningEffort === 'string' && defaultReasoningEffort.trim() ? defaultReasoningEffort.trim() : null
+    defaultReasoningEffort: typeof defaultReasoningEffort === 'string' ? (defaultReasoningEffort.trim() || null) : existing.defaultReasoningEffort
   });
   res.json({ success: true, provider });
 });
 ```
+
+Note: this preserves the existing `defaultReasoningEffort` when the field is omitted from the request body entirely (as the pre-existing quick-toggle button's payload does — it only ever sends `label`/`baseUrl`/`apiKey`/`defaultModel`/`avatarUrl`/`activeInWorkspace`), the same way `activeInWorkspace` is preserved when *it's* omitted. It still correctly clears the value to `null` when the field IS present but empty (the "none" option in the reasoning-effort dropdown) — that's a real, explicit user choice, not an omission.
 
 - [ ] **Step 4: Add the data attribute in `settings.ejs`**
 
@@ -1268,7 +1291,7 @@ Replace with:
 - [ ] **Step 7: Run the tests and verify they pass**
 
 Run: `node --test src/server.test.js src/views/views.test.js`
-Expected: PASS (all tests, 3 new ones included)
+Expected: PASS (all tests, 4 new ones included)
 
 - [ ] **Step 8: Run the full suite**
 
