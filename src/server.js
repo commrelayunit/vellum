@@ -12,6 +12,8 @@ const { createFilesRepo } = require('./db/files');
 const { createSecretsService } = require('./crypto/secrets');
 const { createProvidersRepo } = require('./db/providers');
 const { createUserProfileRepo } = require('./db/user-profile');
+const { createChatMessagesRepo } = require('./db/chat-messages');
+const { createChatCompletionService } = require('./services/chat-completion');
 const { requireAuth, verifyPassword } = require('./auth/middleware');
 
 const db = createConnection(config.dbPath);
@@ -21,8 +23,10 @@ const filesRepo = createFilesRepo(db);
 const secrets = createSecretsService(config.encryptionKey);
 const providersRepo = createProvidersRepo(db, secrets);
 const userProfileRepo = createUserProfileRepo(db);
+const chatMessagesRepo = createChatMessagesRepo(db);
 
 const app = express();
+app.locals.chatCompletionService = createChatCompletionService();
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -197,6 +201,61 @@ app.post('/api/profile', requireAuth, (req, res) => {
     avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null
   });
   res.json({ success: true, profile });
+});
+
+function writeSseEvent(res, payload) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+app.get('/api/chat/:fileId/messages', requireAuth, (req, res) => {
+  const fileId = parseInt(req.params.fileId, 10);
+  res.json({ success: true, messages: chatMessagesRepo.listForFile(fileId) });
+});
+
+app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
+  const fileId = parseInt(req.params.fileId, 10);
+  const file = filesRepo.getById(fileId);
+  if (!file) {
+    return res.status(404).json({ success: false, message: 'File not found' });
+  }
+  const { providerId, message } = req.body;
+  if (typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ success: false, message: 'Message is required' });
+  }
+  const provider = providersRepo.getById(parseInt(providerId, 10));
+  if (!provider || !provider.activeInWorkspace) {
+    return res.status(400).json({ success: false, message: 'Provider is not active in this workspace' });
+  }
+
+  const trimmedMessage = message.trim();
+  chatMessagesRepo.create({ fileId, role: 'user', content: trimmedMessage });
+  const history = chatMessagesRepo.listForFile(fileId).slice(0, -1);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+
+  try {
+    const apiKey = providersRepo.getDecryptedApiKey(provider.id);
+    const fullText = await req.app.locals.chatCompletionService.complete({
+      apiKey,
+      baseUrl: provider.baseUrl,
+      model: provider.defaultModel,
+      reasoningEffort: provider.defaultReasoningEffort,
+      filePath: file.path,
+      fileContent: file.content,
+      history,
+      userMessage: trimmedMessage,
+      onDelta: (delta) => writeSseEvent(res, { type: 'delta', text: delta })
+    });
+    chatMessagesRepo.create({ fileId, role: 'assistant', content: fullText, providerLabel: provider.label });
+    writeSseEvent(res, { type: 'done' });
+    res.end();
+  } catch (err) {
+    const errorText = `Request failed: ${err.message}`;
+    chatMessagesRepo.create({ fileId, role: 'error', content: errorText });
+    writeSseEvent(res, { type: 'error', message: errorText });
+    res.end();
+  }
 });
 
 if (process.env.NODE_ENV === 'production') {

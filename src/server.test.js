@@ -506,3 +506,160 @@ test('GET /writing only shows providers marked active in the workspace', async (
   assert.match(await afterToggle.text(), /Presence Provider/);
   server.close();
 });
+
+test('GET /api/chat/:fileId/messages returns an empty list for a file with no history', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Empty Project' })
+  });
+  const { file } = await createProject.json();
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  const data = await res.json();
+  assert.equal(res.status, 200);
+  assert.deepEqual(data.messages, []);
+  server.close();
+});
+
+test('POST /api/chat/:fileId/messages persists the user message and the streamed assistant reply', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Reply Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: 'key-zzzz' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  app.locals.chatCompletionService = {
+    complete: async ({ onDelta }) => {
+      onDelta('Hel');
+      onDelta('lo');
+      return 'Hello';
+    }
+  };
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Hi there' })
+  });
+  const body = await res.text();
+  assert.match(body, /"type":"delta","text":"Hel"/);
+  assert.match(body, /"type":"delta","text":"lo"/);
+  assert.match(body, /"type":"done"/);
+
+  const historyRes = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  const { messages } = await historyRes.json();
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].role, 'user');
+  assert.equal(messages[0].content, 'Hi there');
+  assert.equal(messages[1].role, 'assistant');
+  assert.equal(messages[1].content, 'Hello');
+  assert.equal(messages[1].providerLabel, 'Fake Provider');
+  server.close();
+});
+
+test('POST /api/chat/:fileId/messages persists a role:"error" message when the provider call fails', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Error Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Failing Provider', baseUrl: 'http://fake', apiKey: 'key-yyyy' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Failing Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  app.locals.chatCompletionService = {
+    complete: async () => { throw new Error('simulated failure'); }
+  };
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Break please' })
+  });
+  const body = await res.text();
+  assert.match(body, /"type":"error"/);
+  assert.match(body, /simulated failure/);
+
+  const historyRes = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  const { messages } = await historyRes.json();
+  assert.equal(messages[1].role, 'error');
+  server.close();
+});
+
+test('POST /api/chat/:fileId/messages rejects a provider that is not active in the workspace', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Inactive Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Inactive Provider', baseUrl: 'http://fake', apiKey: 'key-wwww' })
+  });
+  const { provider } = await createProvider.json();
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Should fail' })
+  });
+  assert.equal(res.status, 400);
+  server.close();
+});
+
+test('unauthenticated GET /api/chat/:fileId/messages redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/chat/1/messages`, { redirect: 'manual' });
+  assert.equal(res.status, 302);
+  server.close();
+});
+
+test('unauthenticated POST /api/chat/:fileId/messages redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/chat/1/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ providerId: 1, message: 'x' }),
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  server.close();
+});
