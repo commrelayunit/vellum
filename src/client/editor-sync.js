@@ -61,10 +61,10 @@ if (container) {
   const AVATAR_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
   function hashString(str) {
     let hash = 0;
-    for (let i = 0; i < str.length; i += 1) {
-      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) | 0;
     }
-    return hash;
+    return Math.abs(hash);
   }
   const profileLabel = container.dataset.profileLabel || 'You';
   awareness.setLocalStateField('user', {
