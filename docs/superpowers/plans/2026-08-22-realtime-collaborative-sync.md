@@ -1812,3 +1812,51 @@ Expected: PASS (no test changes in this task, this is a final regression check b
 git add Dockerfile deploy/install-lxc.sh docs/DEPLOYMENT.md docs/DOCKER.md package.json README.md
 git commit -m "docs: wire the client build step into every deployment path"
 ```
+
+---
+
+### Task 8: Document WebSocket upgrade forwarding for reverse-proxy deployments
+
+**Files:**
+- Modify: `docs/DOCKER.md`
+
+**Interfaces:**
+- Consumes: nothing — docs-only task.
+- Produces: nothing for later tasks — this is the last task before the final whole-branch review.
+
+**Why this task exists:** The WebSocket sync server (Task 4) rides the same port as the rest of the app — the Dockerfile, `docker-compose.yml`, and `deploy/install-lxc.sh` need no changes for it, since none of them do any protocol-aware proxying. But `docs/DOCKER.md`'s "Exposing beyond localhost" section generically suggests putting "nginx, Caddy, or similar" in front of the app. A default/bare nginx reverse-proxy configuration does **not** forward WebSocket upgrade requests — without explicit `Upgrade`/`Connection` header forwarding, a deployer following that doc would get the whole app working normally except real-time collaborative sync, which would silently fail to connect with no obvious error pointing at the cause. Caddy handles WebSocket upgrades automatically and needs no special configuration. This task closes that gap before the feature ships.
+
+- [ ] **Step 1: Expand the reverse-proxy guidance**
+
+Find in `docs/DOCKER.md`:
+
+```markdown
+- **Reverse proxy:** put nginx, Caddy, or similar in front, forwarding to `127.0.0.1:3001`, and let the proxy handle TLS/auth/access control.
+```
+
+Replace with:
+
+```markdown
+- **Reverse proxy:** put nginx, Caddy, or similar in front, forwarding to `127.0.0.1:3001`, and let the proxy handle TLS/auth/access control. **If you use nginx**, note that the writing view's real-time collaborative editing depends on a WebSocket connection (`/ws/files/:fileId`), and nginx does not forward WebSocket upgrade requests by default — without the headers below, real-time sync will silently fail to connect while the rest of the app works normally. Add this to your `location` block:
+  ```nginx
+  location / {
+      proxy_pass http://127.0.0.1:3001;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+  }
+  ```
+  Caddy forwards WebSocket upgrades automatically and needs no special configuration for this.
+```
+
+- [ ] **Step 2: Verify the doc renders correctly**
+
+Read the updated section back (`docs/DOCKER.md`, the "Exposing beyond localhost" heading) and confirm the nested code fence renders as a single, correctly-closed `nginx`-language code block inside the outer bullet — markdown renderers can occasionally mis-nest a fenced code block inside a list item if indentation is off by one space, so double-check the four-space indent under the bullet is consistent throughout the nested block.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/DOCKER.md
+git commit -m "docs: note WebSocket upgrade forwarding for nginx reverse-proxy deployments"
+```
