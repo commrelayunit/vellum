@@ -69,7 +69,17 @@ if (container) {
   const profileLabel = container.dataset.profileLabel || 'You';
   awareness.setLocalStateField('user', {
     name: profileLabel,
-    color: AVATAR_COLORS[0]
+    // colorLight is what y-codemirror.next's y-remote-selections.js paints
+    // a remote peer's selected text range with. It is NOT optional in
+    // practice: when absent, that module derives it as `color + '33'`,
+    // which - because `color` here is a CSS custom-property reference, not
+    // a literal hex - yields the unparseable value `var(--presence-you)33`
+    // and the selection highlight silently disappears. Supplying it
+    // explicitly (using the same color-mix() form buildTheme() above uses
+    // for the active-line highlight) keeps the highlight translucent and
+    // theme-aware.
+    color: AVATAR_COLORS[0],
+    colorLight: `color-mix(in srgb, ${AVATAR_COLORS[0]} 20%, transparent)`
   });
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -106,9 +116,45 @@ if (container) {
   socket.addEventListener('error', seedIfNeverSynced);
   socket.addEventListener('close', seedIfNeverSynced);
 
-  // These listeners are registered inside the 'open' handler (rather than
-  // eagerly at module load) so that any send they trigger only ever happens
-  // once the socket is actually OPEN - sending earlier would throw.
+  // Registered unconditionally, NOT inside the 'open' handler below. Two
+  // separate jobs ride on this one listener:
+  //
+  //   1. forwarding the local edit to the server over the WebSocket, which
+  //      obviously only works while the socket is OPEN (guarded below -
+  //      calling send() on a CONNECTING/CLOSED socket throws), and
+  //   2. dispatching 'vellum:editor-changed', which is what main.js's
+  //      debounced fallback save (POST /api/save-file/:fileId) listens for.
+  //
+  // Job 2 matters most precisely when job 1 is impossible. If the socket
+  // never opens at all - a reverse proxy that doesn't forward the Upgrade
+  // header is the documented failure mode - then registering this inside
+  // 'open' means no listener at all: local edits dispatch nothing, the
+  // fallback save never fires, and every keystroke is silently lost. The
+  // 'close'/'error' seeding above restores existing content in that case
+  // but cannot save anything new. So the listener must exist regardless of
+  // connection state, with only the send() gated on readiness.
+  //
+  // Any updates typed before the socket opens are not lost to the server
+  // either: the SyncStep1/SyncStep2 handshake performed on open reconciles
+  // whatever the local doc accumulated in the meantime.
+  ydoc.on('update', (update, origin) => {
+    // origin === socket means this update arrived FROM the server (it was
+    // applied by readSyncMessage with `socket` as the origin). Echoing it
+    // back would loop, and dispatching 'vellum:editor-changed' for it would
+    // make every remote peer's keystroke trigger a local fallback save.
+    if (origin === socket) return;
+    if (socket.readyState === WebSocket.OPEN) {
+      const enc = encoding.createEncoder();
+      encoding.writeVarUint(enc, MESSAGE_SYNC);
+      syncProtocol.writeUpdate(enc, update);
+      socket.send(encoding.toUint8Array(enc));
+    }
+    document.dispatchEvent(new CustomEvent('vellum:editor-changed'));
+  });
+
+  // The remaining listeners stay inside the 'open' handler because - unlike
+  // the doc-update listener above - everything they do is a send, which is
+  // meaningless (and throws) before the socket is actually OPEN.
   socket.addEventListener('open', () => {
     socket.addEventListener('message', (event) => {
       const decoder = decoding.createDecoder(new Uint8Array(event.data));
@@ -152,15 +198,6 @@ if (container) {
       } else if (messageType === MESSAGE_AWARENESS) {
         applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), socket);
       }
-    });
-
-    ydoc.on('update', (update, origin) => {
-      if (origin === socket) return;
-      const enc = encoding.createEncoder();
-      encoding.writeVarUint(enc, MESSAGE_SYNC);
-      syncProtocol.writeUpdate(enc, update);
-      socket.send(encoding.toUint8Array(enc));
-      document.dispatchEvent(new CustomEvent('vellum:editor-changed'));
     });
 
     awareness.on('update', ({ added, updated, removed }) => {
