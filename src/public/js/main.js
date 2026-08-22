@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Toggle preview mode
     const previewToggle = document.getElementById('preview-toggle');
-    const editorTextarea = document.getElementById('markdown-editor');
+    const editorContainer = document.getElementById('markdown-editor');
     const previewContent = document.createElement('div');
     previewContent.id = 'preview-content';
     previewContent.className = 'preview-content';
@@ -71,24 +71,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const EYE_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     const PENCIL_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
 
-    // Insert preview element after editor
-    if (editorTextarea && previewToggle) {
-        editorTextarea.parentNode.appendChild(previewContent);
+    // Insert preview element after the editor's mount container
+    if (editorContainer && previewToggle) {
+        editorContainer.parentNode.appendChild(previewContent);
 
         previewToggle.addEventListener('click', function() {
-            if (editorTextarea.style.display === 'none') {
+            if (editorContainer.style.display === 'none') {
                 // Show editor, hide preview
-                editorTextarea.style.display = 'block';
+                editorContainer.style.display = '';
                 previewContent.style.display = 'none';
                 previewToggle.innerHTML = EYE_ICON;
                 previewToggle.setAttribute('aria-label', 'Show preview');
                 previewToggle.setAttribute('title', 'Preview');
             } else {
                 // Convert markdown to HTML and show preview, hide editor
-                const markdownContent = editorTextarea.value;
+                const markdownContent = window.__vellumEditorView ? window.__vellumEditorView.state.doc.toString() : '';
                 const htmlContent = convertMarkdownToHtml(markdownContent);
                 previewContent.innerHTML = htmlContent;
-                editorTextarea.style.display = 'none';
+                editorContainer.style.display = 'none';
                 previewContent.style.display = 'block';
                 previewToggle.innerHTML = PENCIL_ICON;
                 previewToggle.setAttribute('aria-label', 'Edit source');
@@ -96,15 +96,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Export button functionality
     const exportBtn = document.getElementById('export-btn');
     if (exportBtn) {
         exportBtn.addEventListener('click', function() {
-            const content = editorTextarea.value;
+            const content = window.__vellumEditorView ? window.__vellumEditorView.state.doc.toString() : '';
             const blob = new Blob([content], { type: 'text/markdown' });
             const url = URL.createObjectURL(blob);
-            
+
             const a = document.createElement('a');
             a.href = url;
             a.download = 'document.md';
@@ -114,19 +114,22 @@ document.addEventListener('DOMContentLoaded', function() {
             URL.revokeObjectURL(url);
         });
     }
-    
-    // Save functionality
-    if (editorTextarea) {
+
+    // Fallback periodic save. The WebSocket sync layer (added in a later
+    // task) is the primary durability path once connected; this keeps
+    // working standalone if that connection is ever unavailable.
+    if (editorContainer) {
         let saveTimeout;
-        editorTextarea.addEventListener('input', function() {
+        function scheduleFallbackSave() {
             clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(saveContent, 1000); // Save after 1 second of inactivity
-        });
-        
+            saveTimeout = setTimeout(saveContent, 1000);
+        }
+        document.addEventListener('vellum:editor-changed', scheduleFallbackSave);
+
         function saveContent() {
-            const fileId = editorTextarea.dataset.fileId;
-            const content = editorTextarea.value;
-            
+            const fileId = editorContainer.dataset.fileId;
+            const content = window.__vellumEditorView ? window.__vellumEditorView.state.doc.toString() : '';
+
             fetch(`/api/save-file/${fileId}`, {
                 method: 'POST',
                 headers: {
@@ -147,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Chat functionality: real streaming completions, per-file history
     const chatInput = document.getElementById('chat-input');
     const sendChatBtn = document.getElementById('send-chat-btn');
@@ -521,28 +524,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.querySelectorAll('[data-avatar-target]').forEach(resolveProviderAvatar);
-
-    // Writing view: highlight the line your cursor is currently on.
-    const lineTint = document.getElementById('cursor-line-tint');
-    if (editorTextarea && lineTint) {
-        // Matches .editor-textarea's 14px font-size * 1.5 line-height.
-        const LINE_HEIGHT_PX = 21;
-
-        function updateCursorLineTint() {
-            const value = editorTextarea.value;
-            const cursorPos = editorTextarea.selectionStart;
-            const linesBeforeCursor = value.slice(0, cursorPos).split('\n').length - 1;
-            const top = linesBeforeCursor * LINE_HEIGHT_PX - editorTextarea.scrollTop;
-            lineTint.style.top = `${top}px`;
-        }
-
-        editorTextarea.addEventListener('click', updateCursorLineTint);
-        editorTextarea.addEventListener('keyup', updateCursorLineTint);
-        editorTextarea.addEventListener('input', updateCursorLineTint);
-        editorTextarea.addEventListener('select', updateCursorLineTint);
-        editorTextarea.addEventListener('scroll', updateCursorLineTint);
-        updateCursorLineTint();
-    }
 
     // Settings page: add/edit/delete provider forms
     const providersList = document.getElementById('providers-list');

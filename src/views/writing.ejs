@@ -29,10 +29,10 @@
     </div>
 
     <div class="editor-content">
-        <div class="cursor-line-tint" id="cursor-line-tint"></div>
-        <textarea id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>"><%= file.content %></textarea>
+        <div id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>"></div>
     </div>
 </div>
+<script id="editor-initial-content" type="application/json"><%- JSON.stringify(file.content).replace(/</g, '\\u003c') %></script>
 
 <div class="chat-panel" id="chat-panel">
     <div class="chat-header">
@@ -62,4 +62,5 @@
     </div>
 </div>
 
+<script src="/js/editor-bundle.js"></script>
 <%- include('partials/footer') %>
