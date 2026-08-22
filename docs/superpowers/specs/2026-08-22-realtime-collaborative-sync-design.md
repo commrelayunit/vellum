@@ -29,6 +29,10 @@ The server keeps one in-memory `Y.Doc` per currently-open file, created on the f
 
 Sync messages between clients and server follow the standard Yjs wire protocol via `y-protocols/sync` (document updates) and `y-protocols/awareness` (ephemeral cursor/selection/presence state) — this is a well-established, widely-used pattern; the server relays sync and awareness messages between all clients connected to the same file's `Y.Doc`, and Yjs's CRDT algorithm handles merging concurrent edits with no custom conflict-resolution code required.
 
+## Build tooling
+
+This app has never had a frontend build step — `main.js` is served as-is via `express.static`. The new client-side dependencies (`yjs`, `y-codemirror.next`, `@codemirror/*`) are npm packages meant to be bundled; browsers can't resolve their bare `import` specifiers on their own, and this project deliberately avoids CDN dependencies. `esbuild` is added as a devDependency: a new `npm run build:client` script bundles a new client-side entry point (`src/client/editor-sync.js`) into a static output file (`src/public/js/editor-bundle.js`), which `writing.ejs` loads alongside the existing plain `main.js`. This build step is wired into the Docker image build, the LXC install script, and `npm run dev`'s workflow (via esbuild's watch mode), so every existing deployment path keeps working with one added step.
+
 ## Editor swap
 
 `src/views/writing.ejs`'s `<textarea id="markdown-editor">` is replaced with a CodeMirror 6 mount point. CodeMirror is configured with:
