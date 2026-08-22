@@ -2,6 +2,15 @@
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, highlightActiveLine } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import * as Y from 'yjs';
+import { yCollab } from 'y-codemirror.next';
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
+import * as syncProtocol from 'y-protocols/sync';
+import * as encoding from 'lib0/encoding';
+import * as decoding from 'lib0/decoding';
+
+const MESSAGE_SYNC = 0;
+const MESSAGE_AWARENESS = 1;
 
 function buildTheme() {
   return EditorView.theme({
@@ -27,27 +36,114 @@ function buildTheme() {
     '&.cm-focused': { outline: 'none' },
     '.cm-activeLine': {
       backgroundColor: 'color-mix(in srgb, var(--presence-you) 14%, transparent)'
+    },
+    '.cm-ySelectionCaret': {
+      borderLeftWidth: '2px'
     }
   });
 }
 
-function mountEditor(container, initialContent) {
+const container = document.getElementById('markdown-editor');
+if (container) {
+  const fileId = container.dataset.fileId;
+  const initialContentEl = document.getElementById('editor-initial-content');
+  const initialContent = initialContentEl ? JSON.parse(initialContentEl.textContent) : '';
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  const awareness = new Awareness(ydoc);
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(`${protocol}//${window.location.host}/ws/files/${fileId}`);
+  socket.binaryType = 'arraybuffer';
+
+  let synced = false;
+
+  function sendSyncStep1() {
+    const enc = encoding.createEncoder();
+    encoding.writeVarUint(enc, MESSAGE_SYNC);
+    syncProtocol.writeSyncStep1(enc, ydoc);
+    socket.send(encoding.toUint8Array(enc));
+  }
+
+  // These listeners are registered inside the 'open' handler (rather than
+  // eagerly at module load) so that any send they trigger only ever happens
+  // once the socket is actually OPEN - sending earlier would throw.
+  socket.addEventListener('open', () => {
+    socket.addEventListener('message', (event) => {
+      const decoder = decoding.createDecoder(new Uint8Array(event.data));
+      const messageType = decoding.readVarUint(decoder);
+      if (messageType === MESSAGE_SYNC) {
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MESSAGE_SYNC);
+        // readSyncMessage returns the INNER sync sub-message type, which is
+        // distinct from the outer MESSAGE_SYNC/MESSAGE_AWARENESS framing
+        // above. The server (see src/services/sync-connection.js) sends its
+        // own outbound SyncStep1 the instant the connection opens - before
+        // it has even seen ours - so the first MESSAGE_SYNC frame a client
+        // receives is often that content-less SyncStep1, not the SyncStep2
+        // reply to the SyncStep1 we sent. Gating "synced" on sub-type
+        // SyncStep2 (rather than "the first sync frame we happen to see")
+        // is required: otherwise the ytext.length === 0 fallback below can
+        // fire while the doc is still empty, insert initialContent locally,
+        // and then get a second, independent copy of that same content
+        // duplicated in when the real SyncStep2 reply lands moments later.
+        const syncMessageType = syncProtocol.readSyncMessage(decoder, enc, ydoc, socket);
+        if (encoding.length(enc) > 1) {
+          socket.send(encoding.toUint8Array(enc));
+        }
+        if (!synced && syncMessageType === syncProtocol.messageYjsSyncStep2) {
+          synced = true;
+          if (ytext.length === 0 && initialContent) {
+            ytext.insert(0, initialContent);
+          }
+        }
+      } else if (messageType === MESSAGE_AWARENESS) {
+        applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), socket);
+      }
+    });
+
+    ydoc.on('update', (update, origin) => {
+      if (origin === socket) return;
+      const enc = encoding.createEncoder();
+      encoding.writeVarUint(enc, MESSAGE_SYNC);
+      syncProtocol.writeUpdate(enc, update);
+      socket.send(encoding.toUint8Array(enc));
+      document.dispatchEvent(new CustomEvent('vellum:editor-changed'));
+    });
+
+    awareness.on('update', ({ added, updated, removed }) => {
+      const changed = added.concat(updated).concat(removed);
+      const enc = encoding.createEncoder();
+      encoding.writeVarUint(enc, MESSAGE_AWARENESS);
+      encoding.writeVarUint8Array(enc, encodeAwarenessUpdate(awareness, changed));
+      socket.send(encoding.toUint8Array(enc));
+    });
+
+    // The server only replies with the file's content (SyncStep2) in
+    // response to a client-initiated SyncStep1 - it never pushes content
+    // unprompted. Without this call, a newly-connecting client would never
+    // receive a file's pre-existing content.
+    sendSyncStep1();
+  });
+
+  // The doc seeds from ytext (empty until the Yjs sync lands), not from
+  // initialContent directly: yCollab's ySync plugin only tracks changes it
+  // observes on ytext, so if the view were pre-populated with initialContent
+  // as a plain string here, the real content arriving later via sync (or
+  // the ytext.insert(0, initialContent) fallback above) would get inserted
+  // a second time on top of it, duplicating the text. initialContent is
+  // only ever written into ytext itself, never used as the CM doc directly.
   const state = EditorState.create({
-    doc: initialContent,
+    doc: ytext.toString(),
     extensions: [
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       highlightActiveLine(),
       buildTheme(),
-      EditorView.lineWrapping
+      EditorView.lineWrapping,
+      yCollab(ytext, awareness)
     ]
   });
-  return new EditorView({ state, parent: container });
-}
-
-const container = document.getElementById('markdown-editor');
-if (container) {
-  const initialContentEl = document.getElementById('editor-initial-content');
-  const initialContent = initialContentEl ? JSON.parse(initialContentEl.textContent) : '';
-  window.__vellumEditorView = mountEditor(container, initialContent);
+  window.__vellumEditorView = new EditorView({ state, parent: container });
 }

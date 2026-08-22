@@ -41,7 +41,8 @@
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.32",
     "openai": "^7.5.0",
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "y-codemirror.next": "^0.3.6"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
