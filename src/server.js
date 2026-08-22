@@ -324,6 +324,23 @@ function authenticateUpgrade(req) {
 function attachWebSocketServer(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
   httpServer.on('upgrade', async (req, socket, head) => {
+    // MUST be the very first statement, before any `await` and before any
+    // write to the socket. A raw upgrade socket has no 'error' listener of
+    // its own, and Node's EventEmitter rethrows an unhandled 'error' event
+    // as an uncaught exception that kills the process. Two things in this
+    // handler open that window: the `await authenticateUpgrade(req)` below
+    // (during which nothing is listening), and the `socket.end(...)`
+    // rejection replies (writing to an already-reset peer). Any client can
+    // reach both without a session cookie, just by opening a TCP
+    // connection to /ws/files/:id and resetting it mid-handshake — so
+    // without this listener, an unauthenticated remote crash is one abort
+    // away. Attaching a no-op-ish listener is the same pattern ws's own
+    // docs and the y-websocket reference server use; ws attaches its own
+    // handlers once handleUpgrade() succeeds, and this one stays harmless
+    // alongside them.
+    socket.on('error', (err) => {
+      console.error('WebSocket upgrade socket error:', err);
+    });
     const match = req.url.match(/^\/ws\/files\/(\d+)$/);
     if (!match) {
       socket.destroy();
