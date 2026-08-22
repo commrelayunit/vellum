@@ -28,7 +28,7 @@ test('writing.ejs renders file content with no stray whitespace', async () => {
     profile: { label: 'Test Person', avatarUrl: null },
     activeProviders: []
   });
-  assert.match(html, /<div id="markdown-editor" class="editor-textarea" data-file-id="1"><\/div>/);
+  assert.match(html, /<div id="markdown-editor" class="editor-textarea" data-file-id="1" data-profile-label="Test Person"><\/div>/);
   assert.match(html, /<script id="editor-initial-content" type="application\/json">"# Hello"<\/script>/);
 });
 

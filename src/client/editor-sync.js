@@ -53,6 +53,25 @@ if (container) {
   const ytext = ydoc.getText('content');
   const awareness = new Awareness(ydoc);
 
+  // Matches src/public/js/main.js's AVATAR_COLORS/hashString convention
+  // exactly, so a writer's live cursor color always matches their
+  // presence-stack avatar color. Duplicated here (not imported) because
+  // this file is a separate, bundled entry point from the unbundled
+  // main.js.
+  const AVATAR_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
+  function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i += 1) {
+      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    }
+    return hash;
+  }
+  const profileLabel = container.dataset.profileLabel || 'You';
+  awareness.setLocalStateField('user', {
+    name: profileLabel,
+    color: AVATAR_COLORS[0]
+  });
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socket = new WebSocket(`${protocol}//${window.location.host}/ws/files/${fileId}`);
   socket.binaryType = 'arraybuffer';

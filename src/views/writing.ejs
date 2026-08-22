@@ -29,7 +29,7 @@
     </div>
 
     <div class="editor-content">
-        <div id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>"></div>
+        <div id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>" data-profile-label="<%= profile.label %>"></div>
     </div>
 </div>
 <script id="editor-initial-content" type="application/json"><%- JSON.stringify(file.content).replace(/</g, '\\u003c') %></script>

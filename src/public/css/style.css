@@ -255,6 +255,14 @@ body {
   min-width: 0;
 }
 
+.cm-ySelectionInfo {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 0;
+  opacity: 0.9;
+}
+
 /* Preview content styling */
 .preview-content {
   flex: 1;
