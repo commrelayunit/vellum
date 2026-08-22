@@ -15,6 +15,9 @@ const { createUserProfileRepo } = require('./db/user-profile');
 const { createChatMessagesRepo } = require('./db/chat-messages');
 const { createChatCompletionService } = require('./services/chat-completion');
 const { requireAuth, verifyPassword } = require('./auth/middleware');
+const { WebSocketServer } = require('ws');
+const { createSyncDocManager } = require('./services/sync-doc-manager');
+const { handleSyncConnection } = require('./services/sync-connection');
 
 const db = createConnection(config.dbPath);
 migrate(db);
@@ -24,6 +27,7 @@ const secrets = createSecretsService(config.encryptionKey);
 const providersRepo = createProvidersRepo(db, secrets);
 const userProfileRepo = createUserProfileRepo(db);
 const chatMessagesRepo = createChatMessagesRepo(db);
+const syncDocManager = createSyncDocManager({ filesRepo });
 
 const app = express();
 app.locals.chatCompletionService = createChatCompletionService();
@@ -35,12 +39,13 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(session({
+const sessionMiddleware = session({
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: 'strict' }
-}));
+});
+app.use(sessionMiddleware);
 
 app.get('/login', (req, res) => {
   res.render('login', { error: null });
@@ -297,6 +302,43 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   res.end();
 });
 
+function authenticateUpgrade(req) {
+  return new Promise((resolve) => {
+    const fakeRes = { getHeader() {}, setHeader() {}, end() {}, writeHead() {} };
+    sessionMiddleware(req, fakeRes, () => {
+      resolve(!!(req.session && req.session.authenticated));
+    });
+  });
+}
+
+function attachWebSocketServer(httpServer) {
+  const wss = new WebSocketServer({ noServer: true });
+  httpServer.on('upgrade', async (req, socket, head) => {
+    const match = req.url.match(/^\/ws\/files\/(\d+)$/);
+    if (!match) {
+      socket.destroy();
+      return;
+    }
+    const authenticated = await authenticateUpgrade(req);
+    if (!authenticated) {
+      // .end() (not .destroy()) so the client's HTTP parser gets a chance
+      // to read the full response line before the socket closes — an
+      // abrupt .destroy() right after .write() can surface to the client
+      // as a connection reset instead of a clean 401.
+      socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      return;
+    }
+    const fileId = parseInt(match[1], 10);
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      handleSyncConnection(ws, fileId, syncDocManager);
+    });
+  });
+  return wss;
+}
+
+module.exports = app;
+module.exports.attachWebSocketServer = attachWebSocketServer;
+
 if (process.env.NODE_ENV === 'production') {
   if (!config.authPasswordHash) {
     console.warn(
@@ -322,9 +364,8 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 if (require.main === module) {
-  app.listen(config.port, () => {
+  const httpServer = app.listen(config.port, () => {
     console.log(`Vellum server running on http://localhost:${config.port}`);
   });
+  app.attachWebSocketServer(httpServer);
 }
-
-module.exports = app;
