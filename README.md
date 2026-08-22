@@ -66,12 +66,21 @@ This implementation includes:
    npm run seed
    ```
 
-6. Start the development server:
+6. Build the editor client bundle (**required** — the collaborative editor is the one part of the frontend that is bundled rather than served as plain browser JS, and `src/public/js/editor-bundle.js` is generated, not committed. Skip this and the writing view loads with an empty editor pane and a 404 for `/js/editor-bundle.js` in the browser console):
+   ```bash
+   npm run build:client
+   ```
+
+7. Start the development server:
    ```bash
    npm start
    ```
 
-7. Visit http://localhost:3001, sign in with the password you hashed in step 3, and access the application.
+8. Visit http://localhost:3001, sign in with the password you hashed in step 3, and access the application.
+
+`npm run dev` builds the bundle for you before starting nodemon (via its `predev` script), so step 6 is only strictly needed for the plain `npm start` path — `start` deliberately has no such hook, because production installs run it after `npm prune --omit=dev`, where `esbuild` is no longer present.
+
+If you're actively changing files under `src/client/`, run `npm run dev:client` in a second terminal alongside `npm run dev` — it's the same esbuild command in `--watch` mode, so the bundle rebuilds on every save. Nodemon itself only restarts the Node server; it does not rebuild the client bundle as you edit. Re-run `npm run build:client` after any `git pull` that touches `src/client/` too (`npm run update` already does this for you — see [Updating](#updating)).
 
 ## Environment Variables
 
@@ -90,7 +99,7 @@ Docker and the Proxmox LXC install script accept a plaintext `AUTH_PASSWORD` ins
 
 | | Development / trying it out | Production |
 |---|---|---|
-| **Native (no container)** | `npm start` after `cp .env.example .env` and filling in `AUTH_PASSWORD_HASH`/`SESSION_SECRET`/`ENCRYPTION_KEY` by hand (see [Development Setup](#development-setup) above) — fastest inner loop; `npm run dev` live-reloads on changes. | Not recommended standalone — use Docker or LXC below so the process is supervised (Docker's restart policy or systemd) and comes back up after a crash or reboot on its own. |
+| **Native (no container)** | `npm run build:client && npm start` after `cp .env.example .env` and filling in `AUTH_PASSWORD_HASH`/`SESSION_SECRET`/`ENCRYPTION_KEY` by hand (see [Development Setup](#development-setup) above) — fastest inner loop; `npm run dev` live-reloads server changes, with `npm run dev:client` alongside it for client ones. | Not recommended standalone — use Docker or LXC below so the process is supervised (Docker's restart policy or systemd) and comes back up after a crash or reboot on its own. |
 | **Docker** | `docker compose up -d --build` with a throwaway `AUTH_PASSWORD` in `.env` or your shell. `SESSION_SECRET`/`ENCRYPTION_KEY` auto-generate — no manual secret handling. Binds to `127.0.0.1` only by default, so it's not reachable from anywhere else on your network. | Same command, but treat `AUTH_PASSWORD` as a real credential (see the `.env` `$`-escaping warning in [docs/DOCKER.md](docs/DOCKER.md)), back up the named volume regularly — it holds both the database and the generated secrets, so a database-only backup can't recover it (see [docs/DOCKER.md § Backups](docs/DOCKER.md#backups)) — and deliberately open it up if you need it reachable beyond localhost rather than relying on the default (see [docs/DOCKER.md § Exposing beyond localhost](docs/DOCKER.md#exposing-beyond-localhost)). |
 | **Proxmox LXC** | `deploy/install-lxc.sh` — one command, sensible fixed defaults (VMID, storage pool, network bridge — all overridable via env vars, see the script's header). Good for trying Vellum out or a low-stakes personal instance. It still generates real secrets and gates login; it just skips customizing those defaults and doesn't set up the backup cron job for you. | Follow the full manual walkthrough in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) instead of the script — same end state, but you choose VMID/storage/network settings deliberately, verify each step as you go, and the walkthrough carries you through the Tailscale login and backup cron setup explicitly rather than leaving them as post-install reminders. |
 
