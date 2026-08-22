@@ -21,6 +21,12 @@ function createFilesRepo(db) {
         .prepare("UPDATE files SET content = ?, updated_at = datetime('now') WHERE id = ?")
         .run(content, id);
       return info.changes > 0;
+    },
+    updateYjsSnapshot(id, { content, contentYjs }) {
+      const info = db
+        .prepare("UPDATE files SET content = ?, content_yjs = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(content, contentYjs, id);
+      return info.changes > 0;
     }
   };
 }

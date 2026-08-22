@@ -44,3 +44,23 @@ test('listByProjectId() returns files ordered by id', () => {
   assert.equal(list.length, 2);
   assert.equal(list[0].path, 'A.md');
 });
+
+test('updateYjsSnapshot() persists both the plain-text mirror and the binary Yjs snapshot', () => {
+  const { files, project } = setup();
+  const file = files.create({ projectId: project.id, path: 'a.md', title: 'A', content: 'original' });
+  const fakeYjsState = Buffer.from([1, 2, 3, 4]);
+
+  const success = files.updateYjsSnapshot(file.id, { content: 'updated via sync', contentYjs: fakeYjsState });
+  assert.equal(success, true);
+
+  const reloaded = files.getById(file.id);
+  assert.equal(reloaded.content, 'updated via sync');
+  assert.ok(Buffer.isBuffer(reloaded.content_yjs));
+  assert.deepEqual(reloaded.content_yjs, fakeYjsState);
+});
+
+test('updateYjsSnapshot() returns false for a nonexistent file id', () => {
+  const { files } = setup();
+  const success = files.updateYjsSnapshot(999999, { content: 'x', contentYjs: Buffer.from([]) });
+  assert.equal(success, false);
+});
