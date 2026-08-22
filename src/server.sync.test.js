@@ -219,3 +219,112 @@ test('the file row is updated after the last client for it disconnects', async (
 
   server.close();
 });
+
+test('a plain-text save via POST /api/save-file nulls out a stale Yjs snapshot, so the next sync connection re-seeds from it instead of loading stale content', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const file = await createProjectAndFile(base, cookie);
+
+  const Y = require('yjs');
+  const syncProtocol = require('y-protocols/sync');
+  const encoding = require('lib0/encoding');
+  const decoding = require('lib0/decoding');
+  const MESSAGE_SYNC = 0;
+
+  function connect() {
+    return new Promise((resolve) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/files/${file.id}`, {
+        headers: { Cookie: cookie }
+      });
+      ws.binaryType = 'arraybuffer';
+      const doc = new Y.Doc();
+      ws.on('open', () => {
+        // Unlike the other connect() helpers in this file, this test
+        // actually depends on the client receiving the server's current
+        // content (not just the reverse direction), so it must send its
+        // own SyncStep1 - mirroring src/client/editor-sync.js's
+        // sendSyncStep1(). Merely replying to the server's unprompted
+        // outbound SyncStep1 only tells the server what the (empty)
+        // client has; it never pulls the server's content down.
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MESSAGE_SYNC);
+        syncProtocol.writeSyncStep1(enc, doc);
+        ws.send(encoding.toUint8Array(enc));
+        resolve({ ws, doc });
+      });
+      ws.on('message', (data) => {
+        const decoder = decoding.createDecoder(new Uint8Array(data));
+        const messageType = decoding.readVarUint(decoder);
+        if (messageType === MESSAGE_SYNC) {
+          const enc = encoding.createEncoder();
+          encoding.writeVarUint(enc, MESSAGE_SYNC);
+          syncProtocol.readSyncMessage(decoder, enc, doc, null);
+          if (encoding.length(enc) > 1) ws.send(encoding.toUint8Array(enc));
+        }
+      });
+      doc.on('update', (update) => {
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MESSAGE_SYNC);
+        syncProtocol.writeUpdate(enc, update);
+        ws.send(encoding.toUint8Array(enc));
+      });
+    });
+  }
+
+  const openSockets = [];
+  try {
+    // Step 1: connect a client, mutate the doc, and disconnect - this
+    // persists a real, non-empty content_yjs snapshot for the file (see
+    // the "file row is updated after the last client disconnects" test
+    // above for the same persist-on-release mechanism).
+    const clientA = await connect();
+    openSockets.push(clientA.ws);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    clientA.doc.getText('content').insert(0, 'STALE_YJS_MARKER ');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    clientA.ws.close();
+    // Give the server time to see the close event and run
+    // docManager.release, which synchronously persists the Yjs snapshot
+    // and evicts the in-memory entry (so the next connect() below is
+    // forced to reload from the DB).
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Step 2: save brand-new plain-text content via the fallback HTTP
+    // route - this is the path exercised when the WebSocket sync isn't
+    // connected.
+    const freshContent = 'FRESH_PLAIN_TEXT_ONLY';
+    const saveRes = await fetch(`${base}/api/save-file/${file.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ content: freshContent })
+    });
+    // Must consume the response body (POST /api/save-file/:fileId returns
+    // {success, message} JSON per src/server.js) before moving on. Leaving
+    // it unread can keep the underlying connection open, which has
+    // previously caused a later server.close() in this same file to hang
+    // forever (server.close() stops accepting new connections but does
+    // not force-close existing ones).
+    await saveRes.json();
+    assert.equal(saveRes.status, 200);
+
+    // Step 3: connect a fresh client. If the stale content_yjs snapshot
+    // from step 1 were still in place, loadInitialContent
+    // (sync-doc-manager.js) would apply it and this client would see the
+    // STALE_YJS_MARKER content from before the save, not the
+    // freshly-saved plain text. With the fix (POST /api/save-file/:fileId
+    // nulling contentYjs), loadInitialContent falls back to seeding fresh
+    // from the just-saved plain-text content.
+    const clientB = await connect();
+    openSockets.push(clientB.ws);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const syncedText = clientB.doc.getText('content').toString();
+    assert.equal(syncedText, freshContent);
+    assert.doesNotMatch(syncedText, /STALE_YJS_MARKER/);
+  } finally {
+    for (const ws of openSockets) ws.close();
+    server.close();
+  }
+});

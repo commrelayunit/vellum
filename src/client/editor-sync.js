@@ -66,6 +66,27 @@ if (container) {
     socket.send(encoding.toUint8Array(enc));
   }
 
+  // Safe offline-only fallback: seed the LOCAL ytext from initialContent,
+  // but only if a real SyncStep2 was never received (synced is still
+  // false). If the connection never succeeded, there is no live peer to
+  // race against - no other client can be concurrently seeding the same
+  // (nonexistent) session, so this is safe. If a connection later succeeds
+  // via some future retry, Yjs's own CRDT merge logic reconciles these
+  // local-only edits correctly, since Yjs operates on individual
+  // operations rather than diffing full text.
+  //
+  // The `ytext.length === 0` guard also protects against double-seeding if
+  // both 'error' and 'close' fire for the same failed connection (a normal
+  // WebSocket sequence): the first call inserts the content, so the second
+  // call's guard is already false.
+  function seedIfNeverSynced() {
+    if (!synced && ytext.length === 0 && initialContent) {
+      ytext.insert(0, initialContent);
+    }
+  }
+  socket.addEventListener('error', seedIfNeverSynced);
+  socket.addEventListener('close', seedIfNeverSynced);
+
   // These listeners are registered inside the 'open' handler (rather than
   // eagerly at module load) so that any send they trigger only ever happens
   // once the socket is actually OPEN - sending earlier would throw.
@@ -84,19 +105,30 @@ if (container) {
         // receives is often that content-less SyncStep1, not the SyncStep2
         // reply to the SyncStep1 we sent. Gating "synced" on sub-type
         // SyncStep2 (rather than "the first sync frame we happen to see")
-        // is required: otherwise the ytext.length === 0 fallback below can
-        // fire while the doc is still empty, insert initialContent locally,
-        // and then get a second, independent copy of that same content
-        // duplicated in when the real SyncStep2 reply lands moments later.
+        // is required so the offline-only seeding above (and any future
+        // synced-dependent logic) never mistakes an unanswered SyncStep1
+        // for a real, content-bearing reply.
+        //
+        // Note: this handler does NOT seed ytext from initialContent, even
+        // though ytext may still be empty here. Doing so used to be a real
+        // race: the server's Y.Doc for a file can genuinely be empty at
+        // sync time (see sync-doc-manager.js's loadInitialContent), and if
+        // two clients connect to that same empty doc at nearly the same
+        // moment, both would independently observe ytext.length === 0 in
+        // their own SyncStep2 handling and both insert initialContent -
+        // Yjs merges both inserts, genuinely duplicating the content. The
+        // server already seeds a genuinely-new file's Y.Doc from its
+        // plain-text content the first time any client connects
+        // (sync-doc-manager.js), so this client-side seeding is redundant
+        // in every healthy case; the only place it is safe is the
+        // offline-only fallback above, which never fires once a real
+        // SyncStep2 has actually landed.
         const syncMessageType = syncProtocol.readSyncMessage(decoder, enc, ydoc, socket);
         if (encoding.length(enc) > 1) {
           socket.send(encoding.toUint8Array(enc));
         }
         if (!synced && syncMessageType === syncProtocol.messageYjsSyncStep2) {
           synced = true;
-          if (ytext.length === 0 && initialContent) {
-            ytext.insert(0, initialContent);
-          }
         }
       } else if (messageType === MESSAGE_AWARENESS) {
         applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), socket);

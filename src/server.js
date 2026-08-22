@@ -127,7 +127,17 @@ app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
   if (typeof content !== 'string') {
     return res.status(400).json({ success: false, message: 'content must be a string' });
   }
-  const success = filesRepo.updateContent(fileId, content);
+  // Use updateYjsSnapshot (with contentYjs explicitly nulled) rather than
+  // updateContent here. This is the fallback plain-text-only save path,
+  // used when the WebSocket sync isn't connected - it must not leave a
+  // stale content_yjs snapshot in place that no longer matches the content
+  // being saved here. sync-doc-manager.js's loadInitialContent already
+  // falls back to seeding a fresh Y.Doc from plain-text content whenever
+  // content_yjs is null, so nulling it here guarantees the next WebSocket
+  // connection re-seeds from this truly-current content instead of loading
+  // stale (possibly empty) Yjs state - closing off the empty-doc race that
+  // the client-side fix in editor-sync.js also addresses.
+  const success = filesRepo.updateYjsSnapshot(fileId, { content, contentYjs: null });
   if (success) {
     res.json({ success: true, message: 'File saved successfully' });
   } else {
