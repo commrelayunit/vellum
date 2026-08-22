@@ -52,6 +52,58 @@ test('a WebSocket upgrade without a valid session cookie is rejected', async () 
   server.close();
 });
 
+test('an authenticated WebSocket upgrade to a nonexistent fileId is cleanly rejected, not a crash', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/files/999999`, {
+    headers: { Cookie: cookie }
+  });
+  const result = await new Promise((resolve) => {
+    ws.on('open', () => resolve('open'));
+    ws.on('unexpected-response', (req, res) => resolve(res.statusCode));
+    ws.on('error', () => resolve('error'));
+  });
+  assert.equal(result, 404);
+
+  // Prove the server process is still alive and responsive afterward,
+  // rather than having crashed on an unhandled rejection.
+  const followUp = await fetch(`${base}/projects`, { headers: { Cookie: cookie } });
+  assert.equal(followUp.status, 200);
+
+  server.close();
+});
+
+test('a malformed binary frame from an authenticated client does not crash the server', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const file = await createProjectAndFile(base, cookie);
+
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/files/${file.id}`, {
+    headers: { Cookie: cookie }
+  });
+  await new Promise((resolve) => ws.on('open', resolve));
+
+  // Garbage bytes: not a valid lib0-encoded sync/awareness message. lib0's
+  // decoder throws on this; the fix wraps the message handler in try/catch
+  // so the throw is logged and swallowed rather than crashing the process.
+  ws.send(Buffer.from([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
+
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  // Prove the process is still alive and responsive by making a normal,
+  // unrelated HTTP request with the same cookie right after.
+  const followUp = await fetch(`${base}/projects`, { headers: { Cookie: cookie } });
+  assert.equal(followUp.status, 200);
+
+  ws.close();
+  server.close();
+});
+
 test('two connected clients converge on the same merged content after concurrent edits', async () => {
   const server = await listen();
   const { port } = server.address();

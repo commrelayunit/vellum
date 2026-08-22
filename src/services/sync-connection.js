@@ -33,18 +33,36 @@ function handleSyncConnection(ws, fileId, docManager) {
   awareness.on('update', awarenessUpdateHandler);
 
   ws.on('message', (data) => {
-    const decoder = decoding.createDecoder(new Uint8Array(data));
-    const messageType = decoding.readVarUint(decoder);
-    if (messageType === MESSAGE_SYNC) {
-      const enc = encoding.createEncoder();
-      encoding.writeVarUint(enc, MESSAGE_SYNC);
-      syncProtocol.readSyncMessage(decoder, enc, doc, ws);
-      if (encoding.length(enc) > 1) {
-        ws.send(encoding.toUint8Array(enc));
+    // lib0's binary decoder throws on truncated/garbage payloads. That
+    // throw would otherwise escape this EventEmitter listener and crash
+    // the whole process (Node has no default handling for a throw inside
+    // an 'on' callback other than rethrowing it as uncaught). A malformed
+    // frame from one client shouldn't kill the session for everyone else,
+    // so log it and drop the message, leaving the connection open.
+    try {
+      const decoder = decoding.createDecoder(new Uint8Array(data));
+      const messageType = decoding.readVarUint(decoder);
+      if (messageType === MESSAGE_SYNC) {
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MESSAGE_SYNC);
+        syncProtocol.readSyncMessage(decoder, enc, doc, ws);
+        if (encoding.length(enc) > 1) {
+          ws.send(encoding.toUint8Array(enc));
+        }
+      } else if (messageType === MESSAGE_AWARENESS) {
+        awarenessProtocol.applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), ws);
       }
-    } else if (messageType === MESSAGE_AWARENESS) {
-      awarenessProtocol.applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), ws);
+    } catch (err) {
+      console.error('Error handling sync message:', err);
     }
+  });
+
+  // ws's internal receiver can emit 'error' on frame/protocol-level issues,
+  // distinct from (and firing before) the message handler above. With no
+  // listener, Node's EventEmitter rethrows an unhandled 'error' event and
+  // crashes the process.
+  ws.on('error', (err) => {
+    console.error('WebSocket error:', err);
   });
 
   ws.on('close', () => {

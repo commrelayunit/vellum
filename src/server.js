@@ -329,6 +329,16 @@ function attachWebSocketServer(httpServer) {
       return;
     }
     const fileId = parseInt(match[1], 10);
+    if (!filesRepo.getById(fileId)) {
+      // Same rationale as the 401 branch above: .end() lets the client's
+      // HTTP parser read the full response line before the socket closes.
+      // Without this check, docManager.acquire(fileId) below would throw
+      // synchronously inside loadInitialContent (reading .content_yjs off
+      // an undefined file row), which escapes as an unhandled rejection
+      // from this async upgrade handler and crashes the whole process.
+      socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
+      return;
+    }
     wss.handleUpgrade(req, socket, head, (ws) => {
       handleSyncConnection(ws, fileId, syncDocManager);
     });
