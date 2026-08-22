@@ -14,7 +14,7 @@
     "seed": "node src/scripts/seed.js",
     "hash-password": "node src/scripts/hash-password.js",
     "migrate": "node src/scripts/migrate.js",
-    "update": "git pull && npm ci --omit=dev && npm run migrate",
+    "update": "git pull && npm ci && npm run build:client && npm prune --omit=dev && npm run migrate",
     "test": "node --test"
   },
   "keywords": [

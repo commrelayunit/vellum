@@ -1,3 +1,14 @@
+FROM node:22-bookworm-slim AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+RUN npm run build:client
+
 FROM node:22-bookworm-slim
 
 WORKDIR /app
@@ -6,6 +17,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY . .
+COPY --from=build /app/src/public/js/editor-bundle.js ./src/public/js/editor-bundle.js
 
 RUN useradd --system --create-home --shell /usr/sbin/nologin vellum \
     && mkdir -p /app/data \

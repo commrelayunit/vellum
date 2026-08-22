@@ -86,7 +86,7 @@ pct exec "$VMID" -- bash -c '
 '
 
 echo "==> Deploying code from $REPO_URL"
-pct exec "$VMID" -- su - vellum -s /bin/bash -c "git clone $REPO_URL /opt/vellum && cd /opt/vellum && npm ci --omit=dev"
+pct exec "$VMID" -- su - vellum -s /bin/bash -c "git clone $REPO_URL /opt/vellum && cd /opt/vellum && npm ci && npm run build:client && npm prune --omit=dev"
 
 echo "==> Bootstrapping secrets"
 SESSION_SECRET="$(pct exec "$VMID" -- node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"

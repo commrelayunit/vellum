@@ -98,3 +98,5 @@ docker compose up -d --build
 The named volume is untouched by a rebuild, so your data and secrets persist across upgrades.
 
 Schema changes apply automatically and incrementally when the container starts — existing projects, files, provider credentials, and settings are never wiped.
+
+The image build now includes a client-asset build step (bundling the collaborative editor's dependencies) — `docker compose up -d --build` handles this automatically, same as before.
