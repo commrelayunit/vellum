@@ -38,3 +38,19 @@ test('getById() returns undefined for a missing project', () => {
   const projects = setup();
   assert.equal(projects.getById(999), undefined);
 });
+
+test('update() renames a project without touching its slug', () => {
+  const projects = setup();
+  const created = projects.create({ name: 'Old Name', description: 'old desc' });
+  const updated = projects.update(created.id, { name: 'New Name', description: 'new desc' });
+  assert.equal(updated.name, 'New Name');
+  assert.equal(updated.description, 'new desc');
+  assert.equal(updated.slug, created.slug);
+});
+
+test('update() persists through getById()', () => {
+  const projects = setup();
+  const created = projects.create({ name: 'Old Name' });
+  projects.update(created.id, { name: 'New Name', description: '' });
+  assert.equal(projects.getById(created.id).name, 'New Name');
+});

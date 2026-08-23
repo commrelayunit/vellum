@@ -104,6 +104,24 @@ app.post('/api/projects', requireAuth, (req, res) => {
   res.status(201).json({ success: true, project, file });
 });
 
+app.post('/api/projects/:id', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (req.body.name !== undefined && typeof req.body.name !== 'string') {
+    return res.status(400).json({ success: false, message: 'Project name must be a string' });
+  }
+  const name = (req.body.name || '').trim();
+  if (!name) {
+    return res.status(400).json({ success: false, message: 'Project name is required' });
+  }
+  const existing = projectsRepo.getById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'Project not found' });
+  }
+  const description = typeof req.body.description === 'string' ? req.body.description.trim() : existing.description;
+  const project = projectsRepo.update(id, { name, description });
+  res.json({ success: true, project });
+});
+
 app.get('/writing', requireAuth, (req, res) => {
   const projectId = parseInt(req.query.project, 10);
   const project = projectsRepo.getById(projectId);

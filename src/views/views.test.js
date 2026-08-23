@@ -21,6 +21,23 @@ test('projects.ejs renders a project card with file details', async () => {
   assert.doesNotMatch(html, /block\(/);
 });
 
+test('projects.ejs renders a project card with rename data attributes and an edit button', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'projects.ejs'), {
+    projects: [
+      {
+        id: 1,
+        name: 'Sample Project',
+        description: 'demo',
+        fileCount: 2,
+        updatedAt: new Date().toISOString(),
+        recentFiles: []
+      }
+    ]
+  });
+  assert.match(html, /data-project-id="1"[^>]*data-name="Sample Project"[^>]*data-description="demo"/);
+  assert.match(html, /class="btn project-edit-btn"/);
+});
+
 test('writing.ejs renders file content with no stray whitespace', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },

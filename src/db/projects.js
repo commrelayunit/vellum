@@ -29,6 +29,12 @@ function createProjectsRepo(db) {
         .prepare('INSERT INTO projects (name, slug, description) VALUES (?, ?, ?)')
         .run(name, slug, description || '');
       return this.getById(info.lastInsertRowid);
+    },
+    update(id, { name, description }) {
+      db.prepare(
+        "UPDATE projects SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(name, description || '', id);
+      return this.getById(id);
     }
   };
 }

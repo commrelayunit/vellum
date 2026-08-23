@@ -457,6 +457,100 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Projects overview: rename a project in place, mirroring the
+    // provider-edit-in-place pattern in Settings.
+    if (projectsList) {
+        projectsList.addEventListener('click', function(e) {
+            const editBtn = e.target.closest('.project-edit-btn');
+            if (!editBtn) return;
+
+            const card = editBtn.closest('.project-card');
+            if (card.querySelector('.provider-form')) return;
+
+            const info = card.querySelector('.project-info');
+            const form = document.createElement('form');
+            form.className = 'provider-form';
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.placeholder = 'Project name';
+            nameInput.required = true;
+            nameInput.maxLength = 60;
+            nameInput.autocomplete = 'off';
+            nameInput.value = card.dataset.name;
+
+            const descriptionInput = document.createElement('input');
+            descriptionInput.type = 'text';
+            descriptionInput.placeholder = 'Description (optional)';
+            descriptionInput.autocomplete = 'off';
+            descriptionInput.value = card.dataset.description;
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'submit';
+            confirmBtn.className = 'btn';
+            confirmBtn.setAttribute('aria-label', 'Save project name');
+            confirmBtn.title = 'Save';
+            confirmBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'btn';
+            cancelBtn.setAttribute('aria-label', 'Cancel');
+            cancelBtn.title = 'Cancel';
+            cancelBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>';
+
+            const actions = document.createElement('div');
+            actions.className = 'provider-form-actions';
+            actions.appendChild(confirmBtn);
+            actions.appendChild(cancelBtn);
+
+            const errorEl = document.createElement('p');
+            errorEl.className = 'provider-form-error';
+            errorEl.hidden = true;
+
+            form.appendChild(nameInput);
+            form.appendChild(descriptionInput);
+            form.appendChild(actions);
+            form.appendChild(errorEl);
+
+            info.replaceWith(form);
+            nameInput.focus();
+
+            cancelBtn.addEventListener('click', function() {
+                form.replaceWith(info);
+            });
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                errorEl.hidden = true;
+                setButtonLoading(confirmBtn, true);
+                fetch(`/api/projects/${card.dataset.projectId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: nameInput.value.trim(),
+                        description: descriptionInput.value.trim()
+                    })
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        setButtonLoading(confirmBtn, false);
+                        errorEl.textContent = data.message || 'Something went wrong.';
+                        errorEl.hidden = false;
+                    }
+                })
+                .catch(function() {
+                    setButtonLoading(confirmBtn, false);
+                    errorEl.textContent = 'Could not reach the server — check your connection and try again.';
+                    errorEl.hidden = false;
+                });
+            });
+        });
+    }
+
     // Settings page: resolve each provider's avatar (custom URL > known-brand
     // icon via Simple Icons > initials+color fallback, same visual pattern as
     // the collaborator presence avatars).

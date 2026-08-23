@@ -69,6 +69,81 @@ test('POST /api/projects rejects an empty name', async () => {
   server.close();
 });
 
+test('POST /api/projects/:id renames a project and updates its description', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Old Name' })
+  });
+  const { project } = await createRes.json();
+
+  const res = await fetch(`${base}/api/projects/${project.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'New Name', description: 'updated' })
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.equal(data.project.name, 'New Name');
+  assert.equal(data.project.description, 'updated');
+  assert.equal(data.project.slug, project.slug);
+  server.close();
+});
+
+test('POST /api/projects/:id rejects an empty name', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Old Name' })
+  });
+  const { project } = await createRes.json();
+
+  const res = await fetch(`${base}/api/projects/${project.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: '  ' })
+  });
+  assert.equal(res.status, 400);
+  server.close();
+});
+
+test('POST /api/projects/:id 404s for an unknown id', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/projects/999999`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'New Name' })
+  });
+  assert.equal(res.status, 404);
+  server.close();
+});
+
+test('unauthenticated POST /api/projects/:id redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/projects/1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'x' }),
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get('location'), /\/login/);
+  server.close();
+});
+
 test('GET /writing renders the project\'s first file by default', async () => {
   const server = await listen();
   const { port } = server.address();
