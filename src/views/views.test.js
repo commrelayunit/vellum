@@ -108,6 +108,16 @@ test('writing.ejs renders a pending-references container above the chat input', 
   assert.match(html, /id="chat-pending-references"/);
 });
 
+test('writing.ejs renders a tool-status element in the chat panel', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Test Person', avatarUrl: null },
+    activeProviders: []
+  });
+  assert.match(html, /id="chat-tool-status"/);
+});
+
 test('writing.ejs renders real presence data, not a hardcoded mock', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },

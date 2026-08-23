@@ -786,6 +786,17 @@ body {
   display: none;
 }
 
+.chat-tool-status {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--ink) 65%, transparent);
+  padding: 0.125rem 0.5rem;
+  font-style: italic;
+}
+
+.chat-tool-status[hidden] {
+  display: none;
+}
+
 .reference-chip {
   display: inline-flex;
   align-items: center;

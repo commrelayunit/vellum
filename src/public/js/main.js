@@ -218,6 +218,17 @@ document.addEventListener('DOMContentLoaded', function() {
             renderPendingReferences();
         });
 
+        const chatToolStatusEl = document.getElementById('chat-tool-status');
+        function showToolStatus(tool) {
+            if (!chatToolStatusEl) return;
+            chatToolStatusEl.textContent = tool === 'edit_document' ? '✏️ Editing document...' : `Running ${tool}...`;
+            chatToolStatusEl.hidden = false;
+        }
+        function hideToolStatus() {
+            if (!chatToolStatusEl) return;
+            chatToolStatusEl.hidden = true;
+        }
+
         function formatTime(isoString) {
             const date = isoString ? new Date(isoString) : new Date();
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -351,7 +362,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                                 replyContentEl.textContent += payload.text;
                                 chatMessages.scrollTop = chatMessages.scrollHeight;
+                            } else if (payload.type === 'tool-start') {
+                                showToolStatus(payload.tool);
+                            } else if (payload.type === 'tool-end') {
+                                hideToolStatus();
                             } else if (payload.type === 'error') {
+                                hideToolStatus();
                                 addMessage('Error', payload.message, 'error-message');
                             }
                         });
@@ -367,6 +383,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(function() {
                 chatInput.disabled = false;
                 setButtonLoading(sendChatBtn, false);
+                hideToolStatus();
                 chatInput.focus();
             });
         }
