@@ -118,7 +118,12 @@ function createChatCompletionService({ createClient } = {}) {
           }))
         });
 
-        for (const call of toolCalls) {
+        // Indexed so the tool-result message's tool_call_id falls back to the
+        // exact same `call_${i}` the assistant message above generated for
+        // this call. A constant fallback would make 2+ parallel tool calls
+        // that both lack an API-provided id collide on one id.
+        for (let i = 0; i < toolCalls.length; i++) {
+          const call = toolCalls[i];
           let args;
           try {
             args = JSON.parse(call.arguments || '{}');
@@ -135,7 +140,7 @@ function createChatCompletionService({ createClient } = {}) {
           if (onToolEnd) onToolEnd(call.name, !!(result && result.success));
           messages.push({
             role: 'tool',
-            tool_call_id: call.id || 'call_0',
+            tool_call_id: call.id || `call_${i}`,
             content: (result && result.message) || (result && result.success ? 'Edit applied.' : 'Edit failed.')
           });
         }
