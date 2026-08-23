@@ -1233,3 +1233,52 @@ test('POST /api/providers/:id preserves defaultReasoningEffort when the field is
   assert.equal(toggled.provider.defaultReasoningEffort, 'medium');
   server.close();
 });
+
+test('POST /api/chat/:fileId/messages applies a tool call to the live document and writes tool-start/tool-end SSE frames', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Agent Edit Project' })
+  });
+  const { file } = await createProject.json();
+  await fetch(`${base}/api/save-file/${file.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ content: 'Hello world' })
+  });
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Agent Provider', baseUrl: 'http://fake', apiKey: 'key-zzzz', color: '#abcdef' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Agent Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  app.locals.chatCompletionService = {
+    complete: async ({ fileContent, onDelta, onToolStart, onToolEnd, executeTool }) => {
+      assert.equal(fileContent, 'Hello world', 'fileContent should reflect the live document');
+      onToolStart('edit_document');
+      const result = await executeTool('edit_document', { old_string: 'world', new_string: 'there' });
+      onToolEnd('edit_document', result.success);
+      onDelta('Done!');
+      return 'Done!';
+    }
+  };
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'change world to there' })
+  });
+  const body = await res.text();
+  assert.match(body, /"type":"tool-start","tool":"edit_document"/);
+  assert.match(body, /"type":"tool-end","tool":"edit_document","success":true/);
+  assert.match(body, /"type":"delta","text":"Done!"/);
+  assert.match(body, /"type":"done"/);
+  server.close();
+});

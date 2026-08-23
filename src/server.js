@@ -17,6 +17,7 @@ const { createChatCompletionService } = require('./services/chat-completion');
 const { requireAuth, verifyPassword } = require('./auth/middleware');
 const { WebSocketServer } = require('ws');
 const { createSyncDocManager } = require('./services/sync-doc-manager');
+const { createAgentEditSession } = require('./services/agent-editor');
 const { handleSyncConnection } = require('./services/sync-connection');
 
 const db = createConnection(config.dbPath);
@@ -334,20 +335,38 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   // must be turned into an SSE error frame rather than left unhandled.
   try {
     const apiKey = providersRepo.getDecryptedApiKey(provider.id);
-    const fullText = await req.app.locals.chatCompletionService.complete({
-      apiKey,
-      baseUrl: provider.baseUrl,
-      model: provider.defaultModel,
-      reasoningEffort: provider.defaultReasoningEffort,
-      filePath: file.path,
-      fileContent: file.content,
-      history,
-      userMessage: trimmedMessage,
-      selections: validSelections,
-      onDelta: (delta) => writeSseEvent(res, { type: 'delta', text: delta })
+    const agentSession = createAgentEditSession({
+      docManager: syncDocManager,
+      fileId: file.id,
+      providerLabel: provider.label,
+      providerColor: provider.color
     });
-    chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label });
-    writeSseEvent(res, { type: 'done' });
+    try {
+      const fullText = await req.app.locals.chatCompletionService.complete({
+        apiKey,
+        baseUrl: provider.baseUrl,
+        model: provider.defaultModel,
+        reasoningEffort: provider.defaultReasoningEffort,
+        filePath: file.path,
+        fileContent: agentSession.getCurrentContent(),
+        history,
+        userMessage: trimmedMessage,
+        selections: validSelections,
+        onDelta: (delta) => writeSseEvent(res, { type: 'delta', text: delta }),
+        onToolStart: (tool) => writeSseEvent(res, { type: 'tool-start', tool }),
+        onToolEnd: (tool, success) => writeSseEvent(res, { type: 'tool-end', tool, success }),
+        executeTool: (name, args) => {
+          if (name !== 'edit_document') {
+            return Promise.resolve({ success: false, message: `Unknown tool: ${name}` });
+          }
+          return agentSession.applyEdit(args.old_string, args.new_string);
+        }
+      });
+      chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label });
+      writeSseEvent(res, { type: 'done' });
+    } finally {
+      agentSession.end();
+    }
   } catch (err) {
     const errorText = `Request failed: ${err && err.message ? err.message : String(err)}`;
     // Persisting the error row is itself a DB call that could throw (e.g.
