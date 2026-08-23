@@ -277,13 +277,14 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   let provider;
   let trimmedMessage;
   let history;
+  let validSelections;
   try {
     const fileId = parseInt(req.params.fileId, 10);
     file = filesRepo.getById(fileId);
     if (!file) {
       return res.status(404).json({ success: false, message: 'File not found' });
     }
-    const { providerId, message } = req.body;
+    const { providerId, message, selections } = req.body;
     if (typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
@@ -293,7 +294,8 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
     }
 
     trimmedMessage = message.trim();
-    chatMessagesRepo.create({ fileId: file.id, role: 'user', content: trimmedMessage });
+    validSelections = Array.isArray(selections) ? selections : [];
+    chatMessagesRepo.create({ fileId: file.id, role: 'user', content: trimmedMessage, selections: validSelections });
     // Cap history sent to the model to the last 40 prior messages, excluding
     // the user message just inserted above (slice(-41, -1): drop the last
     // element, then keep at most 40 before it), so a long-lived conversation
@@ -325,6 +327,7 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
       fileContent: file.content,
       history,
       userMessage: trimmedMessage,
+      selections: validSelections,
       onDelta: (delta) => writeSseEvent(res, { type: 'delta', text: delta })
     });
     chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label });

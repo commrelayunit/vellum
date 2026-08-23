@@ -689,6 +689,84 @@ test('GET /api/chat/:fileId/messages returns an empty list for a file with no hi
   server.close();
 });
 
+test('POST /api/chat/:fileId/messages persists selections on the user message and forwards them to the completion service', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Selections Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: 'key-zzzz' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  let capturedSelections = null;
+  app.locals.chatCompletionService = {
+    complete: async ({ selections, onDelta }) => {
+      capturedSelections = selections;
+      onDelta('ok');
+      return 'ok';
+    }
+  };
+
+  const selections = [{ quotedText: 'Hello', startLine: 1, endLine: 1, anchor: { a: 1 }, head: { a: 2 } }];
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'What does this mean?', selections })
+  });
+  await res.text();
+
+  assert.deepEqual(capturedSelections, selections);
+
+  const historyRes = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  const { messages } = await historyRes.json();
+  assert.deepEqual(messages[0].selections, selections);
+  server.close();
+});
+
+test('POST /api/chat/:fileId/messages ignores a non-array selections field rather than failing', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Bad Selections Project' })
+  });
+  const { file } = await createProject.json();
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: 'key-zzzz' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+  app.locals.chatCompletionService = { complete: async ({ onDelta }) => { onDelta('ok'); return 'ok'; } };
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'hi', selections: 'not-an-array' })
+  });
+  assert.equal(res.status, 200);
+  await res.text();
+  const historyRes = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  const { messages } = await historyRes.json();
+  assert.equal(messages[0].selections, null);
+  server.close();
+});
+
 test('POST /api/chat/:fileId/clear deletes all messages for that file', async () => {
   const server = await listen();
   const { port } = server.address();
