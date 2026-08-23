@@ -20,7 +20,7 @@ test('migrate records each migration exactly once, even when called twice', () =
   migrate(db);
   migrate(db);
   const applied = db.prepare('SELECT id FROM schema_migrations').all().map((r) => r.id);
-  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace', '0004_chat_messages', '0005_provider_reasoning_effort', '0006_file_content_yjs', '0007_presence_colors', '0008_show_line_numbers']);
+  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace', '0004_chat_messages', '0005_provider_reasoning_effort', '0006_file_content_yjs', '0007_presence_colors', '0008_show_line_numbers', '0009_chat_message_selections']);
   db.close();
 });
 
@@ -35,6 +35,7 @@ test('a migration already recorded as applied is genuinely skipped, not just ide
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0006_file_content_yjs')").run();
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0007_presence_colors')").run();
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0008_show_line_numbers')").run();
+  db.prepare("INSERT INTO schema_migrations (id) VALUES ('0009_chat_message_selections')").run();
   migrate(db);
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
   assert.deepEqual(tables, ['schema_migrations']);

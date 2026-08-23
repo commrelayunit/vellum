@@ -51,6 +51,37 @@ test('create() persists a role of "error" for failed requests', () => {
   assert.equal(message.role, 'error');
 });
 
+test('create() persists selections and round-trips them as an array', () => {
+  const { chatMessages, fileA } = setup();
+  const selections = [
+    { quotedText: 'Hello world', startLine: 1, endLine: 1, anchor: { a: 1 }, head: { a: 2 } }
+  ];
+  const message = chatMessages.create({ fileId: fileA.id, role: 'user', content: 'What does this mean?', selections });
+  assert.deepEqual(message.selections, selections);
+});
+
+test('create() defaults selections to null when not provided', () => {
+  const { chatMessages, fileA } = setup();
+  const message = chatMessages.create({ fileId: fileA.id, role: 'user', content: 'Hello' });
+  assert.equal(message.selections, null);
+});
+
+test('create() defaults selections to null when given an empty array', () => {
+  const { chatMessages, fileA } = setup();
+  const message = chatMessages.create({ fileId: fileA.id, role: 'user', content: 'Hello', selections: [] });
+  assert.equal(message.selections, null);
+});
+
+test('listForFile() round-trips selections for each message independently', () => {
+  const { chatMessages, fileA } = setup();
+  const selections = [{ quotedText: 'A', startLine: 1, endLine: 2, anchor: {}, head: {} }];
+  chatMessages.create({ fileId: fileA.id, role: 'user', content: 'Q1', selections });
+  chatMessages.create({ fileId: fileA.id, role: 'assistant', content: 'A1' });
+  const list = chatMessages.listForFile(fileA.id);
+  assert.deepEqual(list[0].selections, selections);
+  assert.equal(list[1].selections, null);
+});
+
 test("deleteForFile() removes only that file's messages, leaving other files' history intact", () => {
   const { chatMessages, fileA, fileB } = setup();
   chatMessages.create({ fileId: fileA.id, role: 'user', content: 'For A' });
