@@ -1,5 +1,25 @@
 // Vellum JavaScript
 
+// Swaps a button's icon for a spinning ring while an async action is in
+// flight, restoring the original icon afterward. The button's current
+// innerHTML is stashed on the element itself (not in a module-level map) so
+// concurrent calls for different buttons never collide.
+function setButtonLoading(btn, loading) {
+    if (loading) {
+        if (btn.dataset.loading === 'true') return;
+        btn.dataset.loading = 'true';
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="btn-spinner"></span>';
+        btn.disabled = true;
+    } else {
+        if (btn.dataset.loading !== 'true') return;
+        btn.innerHTML = btn.dataset.originalHtml;
+        delete btn.dataset.loading;
+        delete btn.dataset.originalHtml;
+        btn.disabled = false;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Toggle chat panel
     const toggleChatBtn = document.getElementById('toggle-chat');
@@ -233,7 +253,7 @@ document.addEventListener('DOMContentLoaded', function() {
             addMessage('You', message, '');
             chatInput.value = '';
             chatInput.disabled = true;
-            sendChatBtn.disabled = true;
+            setButtonLoading(sendChatBtn, true);
 
             const providerId = chatProviderSelect.value;
             const providerLabel = chatProviderSelect.options[chatProviderSelect.selectedIndex].textContent;
@@ -295,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(function() {
                 chatInput.disabled = false;
-                sendChatBtn.disabled = false;
+                setButtonLoading(sendChatBtn, false);
                 chatInput.focus();
             });
         }
@@ -407,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 const name = input.value.trim();
                 if (!name) return;
-                confirmBtn.disabled = true;
+                setButtonLoading(confirmBtn, true);
                 fetch('/api/projects', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -418,12 +438,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.success) {
                         window.location.href = `/writing?project=${data.project.id}&file=${data.file.id}`;
                     } else {
-                        confirmBtn.disabled = false;
+                        setButtonLoading(confirmBtn, false);
                         input.focus();
                     }
                 })
                 .catch(function() {
-                    confirmBtn.disabled = false;
+                    setButtonLoading(confirmBtn, false);
                 });
             });
 
@@ -655,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function() {
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
                 clearFormError();
-                confirmBtn.disabled = true;
+                setButtonLoading(confirmBtn, true);
                 const payload = {
                     label: labelInput.value.trim(),
                     baseUrl: baseUrlInput.value.trim(),
@@ -676,12 +696,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        confirmBtn.disabled = false;
+                        setButtonLoading(confirmBtn, false);
                         showFormError(data.message || 'Something went wrong.');
                     }
                 })
                 .catch(function() {
-                    confirmBtn.disabled = false;
+                    setButtonLoading(confirmBtn, false);
                     showFormError('Could not reach the server — check your connection and try again.');
                 });
             });
@@ -751,19 +771,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (existingError) existingError.remove();
                 }
 
-                deleteBtn.disabled = true;
+                setButtonLoading(deleteBtn, true);
                 fetch(`/api/providers/${card.dataset.providerId}/delete`, { method: 'POST' })
                     .then(function(response) { return response.json(); })
                     .then(function(data) {
                         if (data.success) {
                             card.remove();
                         } else {
-                            deleteBtn.disabled = false;
+                            setButtonLoading(deleteBtn, false);
                             showDeleteError(data.message || 'Something went wrong.');
                         }
                     })
                     .catch(function() {
-                        deleteBtn.disabled = false;
+                        setButtonLoading(deleteBtn, false);
                         showDeleteError('Could not reach the server — check your connection and try again.');
                     });
             }
@@ -834,7 +854,7 @@ document.addEventListener('DOMContentLoaded', function() {
             form.addEventListener('submit', function(ev) {
                 ev.preventDefault();
                 errorEl.hidden = true;
-                confirmBtn.disabled = true;
+                setButtonLoading(confirmBtn, true);
                 fetch('/api/profile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -849,13 +869,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        confirmBtn.disabled = false;
+                        setButtonLoading(confirmBtn, false);
                         errorEl.textContent = data.message || 'Something went wrong.';
                         errorEl.hidden = false;
                     }
                 })
                 .catch(function() {
-                    confirmBtn.disabled = false;
+                    setButtonLoading(confirmBtn, false);
                     errorEl.textContent = 'Could not reach the server — check your connection and try again.';
                     errorEl.hidden = false;
                 });
@@ -877,7 +897,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const card = toggleBtn.closest('.provider-card');
             const currentlyActive = toggleBtn.dataset.active === 'true';
 
-            toggleBtn.disabled = true;
+            setButtonLoading(toggleBtn, true);
             fetch(`/api/providers/${card.dataset.providerId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -896,11 +916,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     window.location.reload();
                 } else {
-                    toggleBtn.disabled = false;
+                    setButtonLoading(toggleBtn, false);
                 }
             })
             .catch(function() {
-                toggleBtn.disabled = false;
+                setButtonLoading(toggleBtn, false);
             });
         });
     }
