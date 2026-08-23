@@ -68,7 +68,13 @@ function buildSelectionReference(state, ytext, from, to) {
     startLine: state.doc.lineAt(from).number,
     endLine: state.doc.lineAt(to).number,
     anchor: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, from)),
-    head: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, to))
+    // assoc: -1 pins `to` to the character just BEFORE it (left-associated)
+    // rather than Yjs's default right-associated 0, which - when `to` lands
+    // exactly at the document's current end - resolves as "the end of the
+    // text" as a moving concept, silently absorbing anything typed
+    // afterward into the resolved range. See Finding 2 in the final-review
+    // fix report.
+    head: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, to, -1))
   };
 }
 
@@ -117,19 +123,30 @@ function selectionReferencePlugin(ytext) {
     }
 
     updateVisibility() {
-      const sel = this.view.state.selection.main;
-      if (sel.from === sel.to || !this.view.hasFocus) {
-        this.button.style.display = 'none';
-        return;
-      }
-      const coords = this.view.coordsAtPos(sel.to);
-      if (!coords) {
-        this.button.style.display = 'none';
-        return;
-      }
-      this.button.style.display = 'flex';
-      this.button.style.top = `${coords.top - 26}px`;
-      this.button.style.left = `${coords.left}px`;
+      // coordsAtPos() must not be called synchronously from update(): it
+      // calls readMeasured(), which throws whenever called while CodeMirror
+      // is in the middle of an update cycle. requestMeasure() defers the
+      // read (and its DOM-writing counterpart) to CodeMirror's own safe
+      // measurement phase instead - see Finding 1 in the final-review fix
+      // report for the full failure mode this avoids. requestMeasure()
+      // already no-ops once the view is destroyed (measure() bails out via
+      // its own `this.destroyed` check), so no extra guard is needed here.
+      this.view.requestMeasure({
+        read: (view) => {
+          const sel = view.state.selection.main;
+          if (sel.from === sel.to || !view.hasFocus) return null;
+          return view.coordsAtPos(sel.to);
+        },
+        write: (coords) => {
+          if (!coords) {
+            this.button.style.display = 'none';
+            return;
+          }
+          this.button.style.display = 'flex';
+          this.button.style.top = `${coords.top - 26}px`;
+          this.button.style.left = `${coords.left}px`;
+        }
+      });
     }
 
     update(update) {
@@ -347,12 +364,17 @@ if (container) {
   window.__vellumEditorView = new EditorView({ state, parent: container });
 
   window.__vellumJumpToReference = function(anchorJSON, headJSON) {
-    const target = resolveJumpTarget(ydoc, ytext, anchorJSON, headJSON);
-    if (!target) return;
-    window.__vellumEditorView.dispatch({
-      selection: { anchor: target.from, head: target.to },
-      scrollIntoView: true
-    });
-    window.__vellumEditorView.focus();
+    try {
+      const target = resolveJumpTarget(ydoc, ytext, anchorJSON, headJSON);
+      if (!target) return;
+      window.__vellumEditorView.dispatch({
+        selection: { anchor: target.from, head: target.to },
+        scrollIntoView: true
+      });
+      window.__vellumEditorView.focus();
+    } catch {
+      // Silent no-op per spec: malformed/incompatible stored position data
+      // should never surface as a user-facing error.
+    }
   };
 }

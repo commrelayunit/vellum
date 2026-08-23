@@ -265,6 +265,39 @@ test('resolveJumpTarget returns null when resolved against an unrelated document
   assert.equal(resolveJumpTarget(ydocB, ytextB, anchorJSON, headJSON), null);
 });
 
+test('buildSelectionReference pins a selection ending at the document end so later typing is not absorbed', () => {
+  const Y = require('yjs');
+  const { EditorState } = require('@codemirror/state');
+  const source = loadSource();
+  const buildFnSource = extractFunctionSource(source, 'buildSelectionReference');
+  const resolveFnSource = extractFunctionSource(source, 'resolveJumpTarget');
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source functions
+  const buildSelectionReference = new Function('Y', `return (${buildFnSource});`)(Y);
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source functions
+  const resolveJumpTarget = new Function('Y', `return (${resolveFnSource});`)(Y);
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  ytext.insert(0, 'Hello world');
+  const state = EditorState.create({ doc: ytext.toString() });
+
+  // Selection ends exactly at the current end of the document - the case
+  // the default (right-associated) relative position gets wrong.
+  const ref = buildSelectionReference(state, ytext, 0, ytext.length);
+  assert.equal(ref.quotedText, 'Hello world');
+
+  // Something is typed at the end of the document after the reference was
+  // captured.
+  ytext.insert(ytext.length, ' and more');
+
+  const resolved = resolveJumpTarget(ydoc, ytext, ref.anchor, ref.head);
+  assert.deepEqual(
+    resolved,
+    { from: 0, to: 11 },
+    'the resolved end must stay pinned to the original selection end, not grow to include text typed afterward'
+  );
+});
+
 test('window.__vellumJumpToReference is exposed alongside window.__vellumEditorView', () => {
   const source = loadSource();
   assert.match(source, /window\.__vellumJumpToReference = function/);
