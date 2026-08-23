@@ -70,6 +70,16 @@ function createAgentEditSession({ docManager, fileId, providerLabel, providerCol
     },
 
     async applyEdit(oldString, newString) {
+      // The tool schema's "type": "string" is advisory only - a model asked to
+      // change a year or a version number can emit `"old_string": 2024`
+      // unquoted. Without this guard, countOccurrences() spins forever
+      // (`needle.length` is undefined -> `index + NaN` -> indexOf restarts
+      // from 0), blocking the whole event loop, and a non-string/missing
+      // new_string silently deletes old_string while reporting success. This
+      // must return BEFORE any document read or mutation.
+      if (typeof oldString !== 'string' || typeof newString !== 'string') {
+        return { success: false, message: 'old_string and new_string must both be strings' };
+      }
       const current = ytext.toString();
       const occurrences = countOccurrences(current, oldString);
       if (occurrences === 0) {
@@ -104,7 +114,15 @@ function createAgentEditSession({ docManager, fileId, providerLabel, providerCol
         inserted += chunk.length;
         const nextIndex = insertAt + chunk.length;
         updateCursor(nextIndex);
-        anchorPos = Y.createRelativePositionFromTypeIndex(ytext, nextIndex);
+        // assoc: -1 binds this position to the character just inserted
+        // (left-associated) rather than Yjs's default right-associated 0,
+        // which would bind to "whatever comes next" - including a
+        // concurrent human edit landing at this exact point between
+        // chunks, splicing it into the middle of the agent's own text.
+        // This codebase hit this exact trap once before; see
+        // src/client/editor-sync.js's buildSelectionReference head
+        // position for the same fix and reasoning.
+        anchorPos = Y.createRelativePositionFromTypeIndex(ytext, nextIndex, -1);
         if (inserted < newString.length) {
           await sleep(chunkDelayMs);
         }

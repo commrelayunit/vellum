@@ -85,6 +85,61 @@ test('applyEdit() stays correct when a concurrent edit happens elsewhere in the 
   session.end();
 });
 
+test('applyEdit() rejects a non-string old_string without hanging or mutating the document', async () => {
+  const { docManager } = setup('Written in 2024 by me.');
+  const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkDelayMs: 0 });
+  const result = await session.applyEdit(2024, '2025');
+  assert.equal(result.success, false);
+  assert.match(result.message, /must both be strings/);
+  assert.equal(session.getCurrentContent(), 'Written in 2024 by me.');
+  session.end();
+});
+
+test('applyEdit() rejects a non-string new_string without mutating the document', async () => {
+  const { docManager } = setup('year 2024 here');
+  const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkDelayMs: 0 });
+  const result = await session.applyEdit('2024', 2025);
+  assert.equal(result.success, false);
+  assert.match(result.message, /must both be strings/);
+  assert.equal(session.getCurrentContent(), 'year 2024 here');
+  session.end();
+});
+
+test('applyEdit() rejects a missing new_string without mutating the document', async () => {
+  const { docManager } = setup('Hello world');
+  const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkDelayMs: 0 });
+  const result = await session.applyEdit('world', undefined);
+  assert.equal(result.success, false);
+  assert.match(result.message, /must both be strings/);
+  assert.equal(session.getCurrentContent(), 'Hello world');
+  session.end();
+});
+
+test('applyEdit() keeps a concurrent human edit from splicing into the middle of the agent\'s own text', async () => {
+  const { docManager } = setup('AAA-BBB');
+  const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkSize: 1, chunkDelayMs: 5 });
+  const editPromise = session.applyEdit('-', '123456');
+  await new Promise((resolve) => setTimeout(resolve, 8));
+  const { doc } = docManager.acquire(1);
+  // Insert exactly AT the agent's own cursor - i.e. immediately after the
+  // last chunk it landed, which is the boundary right before 'BBB'. This is
+  // the position the re-anchor binds to, and the only place where the
+  // default assoc (0) vs assoc: -1 makes any difference.
+  doc.getText('content').insert(doc.getText('content').toString().indexOf('BBB'), 'HUMAN');
+  docManager.release(1);
+  await editPromise;
+  // The agent's own text must stay contiguous - a human edit landing
+  // exactly at the agent's cursor must not end up spliced into the
+  // middle of it.
+  assert.doesNotMatch(session.getCurrentContent(), /1\d*HUMAN\d*6/, 'HUMAN must not appear inside the agent\'s own inserted text');
+  // With assoc: -1 the outcome is fully invariant to which chunk had landed
+  // when the human edit fired (verified by hand with real yjs at concurrent-
+  // edit delays of 0, 1, 8, 12, 20 and 24ms - all produce this same string),
+  // so the exact result can be asserted too.
+  assert.equal(session.getCurrentContent(), 'AAA123456HUMANBBB');
+  session.end();
+});
+
 test('applyEdit() registers a synthetic awareness entry with the provider color, removed by end()', async () => {
   const { docManager } = setup('Hello world');
   const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent Smith', providerColor: '#123456', chunkDelayMs: 0 });
