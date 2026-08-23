@@ -466,7 +466,8 @@ body {
 .chat-panel.collapsed .chat-header h3,
 .chat-panel.collapsed #chat-provider-select,
 .chat-panel.collapsed .chat-messages,
-.chat-panel.collapsed .chat-input {
+.chat-panel.collapsed .chat-input,
+.chat-panel.collapsed #chat-pending-references {
   display: none;
 }
 
