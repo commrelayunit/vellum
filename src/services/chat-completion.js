@@ -25,7 +25,7 @@ const EDIT_DOCUMENT_TOOL = {
 const MAX_TOOL_ROUNDS = 6;
 
 function buildSystemPrompt(filePath, fileContent) {
-  return `You are an AI assistant helping edit a document called ${filePath}. Current document content:\n\n${fileContent}`;
+  return `You are an AI assistant helping edit a document called ${filePath}. You can edit this document directly using the edit_document tool - use it when the user asks you to change something, rather than only describing the change in your reply. Current document content:\n\n${fileContent}`;
 }
 
 function formatContentWithSelections(content, selections) {

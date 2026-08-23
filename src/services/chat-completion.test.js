@@ -57,6 +57,16 @@ test('complete() includes the file path and content in a system message', async 
   assert.match(capture.request.messages[0].content, /# My Notes/);
 });
 
+test('complete() tells the model in the system message that it can call edit_document directly', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  await service.complete({
+    apiKey: 'key', baseUrl: 'http://x', model: 'gpt-5',
+    filePath: 'notes.md', fileContent: '# My Notes', history: [], userMessage: 'hi', onDelta: () => {}
+  });
+  assert.match(capture.request.messages[0].content, /edit_document/);
+});
+
 test('complete() includes reasoning_effort only when provided', async () => {
   const capture = {};
   const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
