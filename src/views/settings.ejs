@@ -5,8 +5,8 @@
         <h2>Settings</h2>
     </div>
 
-    <div class="profile-card" id="profile-card" data-label="<%= profile.label %>" data-avatar-url="<%= profile.avatarUrl || '' %>">
-        <div class="provider-avatar" data-avatar-target data-skip-brand-lookup="true" data-label="<%= profile.label %>" <% if (profile.avatarUrl) { %>data-avatar-url="<%= profile.avatarUrl %>"<% } %>></div>
+    <div class="profile-card" id="profile-card" data-label="<%= profile.label %>" data-avatar-url="<%= profile.avatarUrl || '' %>" data-cursor-color="<%= profile.cursorColor || '' %>">
+        <div class="provider-avatar" data-avatar-target data-skip-brand-lookup="true" data-label="<%= profile.label %>" data-color="<%= profile.cursorColor || '' %>" <% if (profile.avatarUrl) { %>data-avatar-url="<%= profile.avatarUrl %>"<% } %>></div>
         <div class="project-info">
             <h3><%= profile.label %></h3>
             <p class="project-meta">Your profile</p>
@@ -33,8 +33,8 @@
 
     <div class="projects-list" id="providers-list">
         <% providers.forEach(provider => { %>
-            <div class="provider-card" data-provider-id="<%= provider.id %>" data-label="<%= provider.label %>" data-base-url="<%= provider.baseUrl %>" data-default-model="<%= provider.defaultModel || '' %>" data-default-reasoning-effort="<%= provider.defaultReasoningEffort || '' %>" data-avatar-url="<%= provider.avatarUrl || '' %>">
-                <div class="provider-avatar" data-avatar-target data-label="<%= provider.label %>" <% if (provider.avatarUrl) { %>data-avatar-url="<%= provider.avatarUrl %>"<% } %>></div>
+            <div class="provider-card" data-provider-id="<%= provider.id %>" data-label="<%= provider.label %>" data-base-url="<%= provider.baseUrl %>" data-default-model="<%= provider.defaultModel || '' %>" data-default-reasoning-effort="<%= provider.defaultReasoningEffort || '' %>" data-avatar-url="<%= provider.avatarUrl || '' %>" data-color="<%= provider.color || '' %>">
+                <div class="provider-avatar" data-avatar-target data-label="<%= provider.label %>" data-color="<%= provider.color || '' %>" <% if (provider.avatarUrl) { %>data-avatar-url="<%= provider.avatarUrl %>"<% } %>></div>
                 <div class="project-info">
                     <h3><%= provider.label %></h3>
                     <p class="project-meta"><%= provider.baseUrl %></p>

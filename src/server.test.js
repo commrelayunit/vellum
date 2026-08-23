@@ -206,6 +206,43 @@ test('POST /api/providers creates a provider and masks the key in the response',
   server.close();
 });
 
+test('POST /api/providers persists color and POST /api/providers/:id updates it', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'OpenClaw', baseUrl: 'http://localhost:18789/v1', apiKey: 'secret-token-9999', color: '#c96f48' })
+  });
+  const { provider } = await createRes.json();
+  assert.equal(provider.color, '#c96f48');
+
+  const updateRes = await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'OpenClaw', baseUrl: 'http://localhost:18789/v1', apiKey: '', color: '#5b6eae' })
+  });
+  const updateData = await updateRes.json();
+  assert.equal(updateData.provider.color, '#5b6eae');
+  server.close();
+});
+
+test('POST /api/providers rejects a malformed color', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'OpenClaw', baseUrl: 'http://localhost:18789/v1', apiKey: 'secret-token-9999', color: 'not-a-color' })
+  });
+  assert.equal(res.status, 400);
+  server.close();
+});
+
 test('POST /api/providers rejects a missing label, base URL, or API key', async () => {
   const server = await listen();
   const { port } = server.address();
@@ -353,6 +390,36 @@ test('POST /api/profile updates label and avatarUrl', async () => {
   assert.equal(data.success, true);
   assert.equal(data.profile.label, 'Velitchko');
   assert.equal(data.profile.avatarUrl, 'https://example.com/me.png');
+  server.close();
+});
+
+test('POST /api/profile updates cursorColor and round-trips it', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Velitchko', cursorColor: '#5b6eae' })
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.profile.cursorColor, '#5b6eae');
+  server.close();
+});
+
+test('POST /api/profile rejects a malformed cursorColor', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Velitchko', cursorColor: 'not-a-color' })
+  });
+  assert.equal(res.status, 400);
   server.close();
 });
 

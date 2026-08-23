@@ -104,19 +104,19 @@ test('the local awareness user state provides colorLight, not just color', () =>
   const match = source.match(/awareness\.setLocalStateField\('user',\s*(\{[\s\S]*?\n\s*\})\);/);
   assert.ok(match, "expected an awareness.setLocalStateField('user', {...}) call");
 
-  // Evaluate the real object literal from the source, supplying the two
-  // identifiers it closes over.
+  // Evaluate the real object literal from the source, supplying the
+  // identifier it closes over.
   // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source object literal
-  const build = new Function('AVATAR_COLORS', 'profileLabel', `return (${match[1]});`);
-  const userState = build(['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'], 'Tester');
+  const build = new Function('profileLabel', 'localColor', `return (${match[1]});`);
+  const userState = build('Tester', 'var(--presence-you)');
 
   assert.equal(typeof userState.name, 'string');
   assert.equal(typeof userState.color, 'string');
   // y-codemirror.next's y-remote-selections.js reads state.user.colorLight
   // for the translucent selection-range background and falls back to
-  // `color + '33'` when it is missing. Because `color` here is a CSS
+  // `color + '33'` when it is missing. Because `color` here can be a CSS
   // custom-property reference rather than a literal hex, that fallback
-  // produces the unparseable `var(--presence-you)33` and the remote
+  // could produce the unparseable `var(--presence-you)33` and the remote
   // selection highlight vanishes entirely.
   assert.equal(
     typeof userState.colorLight,
@@ -130,4 +130,29 @@ test('the local awareness user state provides colorLight, not just color', () =>
     'colorLight must be a usable color value, not a bare var() reference that could be concatenated onto'
   );
   assert.match(userState.colorLight, /^color-mix\(in srgb, var\(--presence-you\) \d+%, transparent\)$/);
+});
+
+test('the local cursor color prefers the profile\'s stored cursorColor over the default palette', () => {
+  const source = loadSource();
+  const match = source.match(/const localColor = ([^\n;]+);/);
+  assert.ok(match, 'expected a `const localColor = ...` assignment reading the profile cursor color with a fallback');
+  assert.match(
+    match[1],
+    /container\.dataset\.profileCursorColor/,
+    'localColor should be derived from container.dataset.profileCursorColor'
+  );
+  assert.match(
+    match[1],
+    /AVATAR_COLORS\[0\]/,
+    'localColor should fall back to AVATAR_COLORS[0] when no custom color is stored'
+  );
+});
+
+test('buildTheme is called with the same localColor used for the local awareness state', () => {
+  const source = loadSource();
+  assert.match(
+    source,
+    /buildTheme\(localColor\)/,
+    'expected buildTheme to receive localColor, so the active-line tint matches the chosen cursor color'
+  );
 });

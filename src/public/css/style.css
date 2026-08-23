@@ -698,6 +698,17 @@ body {
   padding: 0.25rem;
 }
 
+/* Overrides the borderless/backgroundless rule above - a native color swatch
+   needs its own compact, bordered box rather than blending into the form. */
+.provider-form input.color-swatch-input {
+  width: 28px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
 .provider-form-actions {
   display: flex;
   gap: 0.25rem;

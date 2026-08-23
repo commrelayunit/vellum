@@ -151,8 +151,14 @@ app.get('/settings', requireAuth, (req, res) => {
   res.render('settings', { providers, profile });
 });
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+function isValidColor(value) {
+  return typeof value !== 'string' || value.trim() === '' || HEX_COLOR_RE.test(value.trim());
+}
+
 app.post('/api/providers', requireAuth, (req, res) => {
-  const { label, baseUrl, apiKey, defaultModel, avatarUrl, defaultReasoningEffort } = req.body;
+  const { label, baseUrl, apiKey, defaultModel, avatarUrl, color, defaultReasoningEffort } = req.body;
   if (typeof label !== 'string' || !label.trim()) {
     return res.status(400).json({ success: false, message: 'Label is required' });
   }
@@ -162,12 +168,16 @@ app.post('/api/providers', requireAuth, (req, res) => {
   if (typeof apiKey !== 'string' || !apiKey.trim()) {
     return res.status(400).json({ success: false, message: 'API key is required' });
   }
+  if (!isValidColor(color)) {
+    return res.status(400).json({ success: false, message: 'Color must be a hex value like #5b6eae' });
+  }
   const provider = providersRepo.create({
     label: label.trim(),
     baseUrl: baseUrl.trim(),
     apiKey: apiKey.trim(),
     defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
     avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
+    color: typeof color === 'string' && color.trim() ? color.trim() : null,
     defaultReasoningEffort: typeof defaultReasoningEffort === 'string' && defaultReasoningEffort.trim() ? defaultReasoningEffort.trim() : null
   });
   res.status(201).json({ success: true, provider });
@@ -175,12 +185,15 @@ app.post('/api/providers', requireAuth, (req, res) => {
 
 app.post('/api/providers/:id', requireAuth, (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { label, baseUrl, apiKey, defaultModel, avatarUrl, activeInWorkspace, defaultReasoningEffort } = req.body;
+  const { label, baseUrl, apiKey, defaultModel, avatarUrl, color, activeInWorkspace, defaultReasoningEffort } = req.body;
   if (typeof label !== 'string' || !label.trim()) {
     return res.status(400).json({ success: false, message: 'Label is required' });
   }
   if (typeof baseUrl !== 'string' || !baseUrl.trim()) {
     return res.status(400).json({ success: false, message: 'Base URL is required' });
+  }
+  if (!isValidColor(color)) {
+    return res.status(400).json({ success: false, message: 'Color must be a hex value like #5b6eae' });
   }
   const existing = providersRepo.getById(id);
   if (!existing) {
@@ -192,6 +205,7 @@ app.post('/api/providers/:id', requireAuth, (req, res) => {
     apiKey: typeof apiKey === 'string' ? apiKey.trim() : '',
     defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
     avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
+    color: typeof color === 'string' && color.trim() ? color.trim() : null,
     activeInWorkspace: typeof activeInWorkspace === 'boolean' ? activeInWorkspace : existing.activeInWorkspace,
     defaultReasoningEffort: typeof defaultReasoningEffort === 'string' ? (defaultReasoningEffort.trim() || null) : existing.defaultReasoningEffort
   });
@@ -209,13 +223,17 @@ app.post('/api/providers/:id/delete', requireAuth, (req, res) => {
 });
 
 app.post('/api/profile', requireAuth, (req, res) => {
-  const { label, avatarUrl } = req.body;
+  const { label, avatarUrl, cursorColor } = req.body;
   if (typeof label !== 'string' || !label.trim()) {
     return res.status(400).json({ success: false, message: 'Label is required' });
   }
+  if (!isValidColor(cursorColor)) {
+    return res.status(400).json({ success: false, message: 'Color must be a hex value like #5b6eae' });
+  }
   const profile = userProfileRepo.update({
     label: label.trim(),
-    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null
+    avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
+    cursorColor: typeof cursorColor === 'string' && cursorColor.trim() ? cursorColor.trim() : null
   });
   res.json({ success: true, profile });
 });

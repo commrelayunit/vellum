@@ -31,3 +31,22 @@ test('update() with a null avatarUrl clears a previously-set one', () => {
   const cleared = profile.update({ label: 'Velitchko', avatarUrl: null });
   assert.equal(cleared.avatarUrl, null);
 });
+
+test('get() returns a null cursorColor before any is set', () => {
+  const { profile } = setup();
+  assert.equal(profile.get().cursorColor, null);
+});
+
+test('update() persists cursorColor and round-trips through get()', () => {
+  const { profile } = setup();
+  const updated = profile.update({ label: 'Velitchko', cursorColor: '#5b6eae' });
+  assert.equal(updated.cursorColor, '#5b6eae');
+  assert.deepEqual(profile.get(), updated);
+});
+
+test('update() with a null cursorColor clears a previously-set one', () => {
+  const { profile } = setup();
+  profile.update({ label: 'Velitchko', cursorColor: '#5b6eae' });
+  const cleared = profile.update({ label: 'Velitchko', cursorColor: null });
+  assert.equal(cleared.cursorColor, null);
+});

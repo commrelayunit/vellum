@@ -28,8 +28,29 @@ test('writing.ejs renders file content with no stray whitespace', async () => {
     profile: { label: 'Test Person', avatarUrl: null },
     activeProviders: []
   });
-  assert.match(html, /<div id="markdown-editor" class="editor-textarea" data-file-id="1" data-profile-label="Test Person"><\/div>/);
+  assert.match(html, /<div id="markdown-editor" class="editor-textarea" data-file-id="1" data-profile-label="Test Person" data-profile-cursor-color=""><\/div>/);
   assert.match(html, /<script id="editor-initial-content" type="application\/json">"# Hello"<\/script>/);
+});
+
+test('writing.ejs passes the profile cursorColor through to the editor mount point', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Test Person', avatarUrl: null, cursorColor: '#5b6eae' },
+    activeProviders: []
+  });
+  assert.match(html, /data-profile-cursor-color="#5b6eae"/);
+});
+
+test('writing.ejs renders presence avatars with data-color from profile and provider color', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Real User', avatarUrl: null, cursorColor: '#5b6eae' },
+    activeProviders: [{ id: 1, label: 'Active Agent', avatarUrl: null, color: '#c96f48' }]
+  });
+  assert.match(html, /data-label="Real User"[^>]*data-color="#5b6eae"/);
+  assert.match(html, /data-label="Active Agent"[^>]*data-color="#c96f48"/);
 });
 
 test('writing.ejs renders real presence data, not a hardcoded mock', async () => {
@@ -112,4 +133,13 @@ test('settings.ejs renders a provider card with its reasoning effort data attrib
     profile: { label: 'Test Person', avatarUrl: null }
   });
   assert.match(html, /data-default-reasoning-effort="low"/);
+});
+
+test('settings.ejs renders the profile and provider color as data attributes', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'settings.ejs'), {
+    providers: [{ id: 1, label: 'Test', baseUrl: 'http://x', maskedKey: '•••• aaaa', defaultModel: null, avatarUrl: null, activeInWorkspace: false, defaultReasoningEffort: null, color: '#c96f48' }],
+    profile: { label: 'Test Person', avatarUrl: null, cursorColor: '#5b6eae' }
+  });
+  assert.match(html, /id="profile-card"[^>]*data-cursor-color="#5b6eae"/);
+  assert.match(html, /data-provider-id="1"[^>]*data-color="#c96f48"/);
 });

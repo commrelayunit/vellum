@@ -452,6 +452,10 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
 
     const AVATAR_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
+    // Real hex mirrors of the --presence-* CSS custom properties (style.css).
+    // <input type="color"> can't resolve a var() reference, so a color
+    // picker's default swatch needs an actual hex value to show.
+    const HEX_PRESENCE_COLORS = ['#2F6F64', '#C96F48', '#5B6EAE'];
 
     function hashString(str) {
         let hash = 0;
@@ -459,6 +463,15 @@ document.addEventListener('DOMContentLoaded', function() {
             hash = (hash * 31 + str.charCodeAt(i)) | 0;
         }
         return Math.abs(hash);
+    }
+
+    // The hex a color-picker swatch should default to when no custom color is
+    // set yet: the same color renderInitialsFallback would currently paint,
+    // so opening the picker doesn't jarringly default to black.
+    function defaultColorFor(label, isOwnProfile) {
+        return isOwnProfile
+            ? HEX_PRESENCE_COLORS[0]
+            : HEX_PRESENCE_COLORS[hashString(label) % HEX_PRESENCE_COLORS.length];
     }
 
     function initialsFor(label) {
@@ -477,14 +490,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderInitialsFallback(target, label) {
-        // The user's own profile avatar (data-skip-brand-lookup="true") always
-        // uses AVATAR_COLORS[0] (--presence-you) so it visually matches the
-        // "this is you" cursor-line tint, instead of a hash-derived color that
-        // would only coincidentally line up with --presence-you.
+        // A custom color (the user's chosen cursor color, or a provider's
+        // chosen color) always wins. Otherwise the user's own profile avatar
+        // (data-skip-brand-lookup="true") uses AVATAR_COLORS[0]
+        // (--presence-you) so it visually matches the "this is you"
+        // cursor-line tint, and everyone else falls back to a hash-derived
+        // color from the same 3-color palette.
         const isOwnProfile = target.dataset.skipBrandLookup === 'true';
-        const color = isOwnProfile
-            ? AVATAR_COLORS[0]
-            : AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
+        const customColor = target.dataset.color;
+        const color = customColor
+            ? customColor
+            : isOwnProfile
+                ? AVATAR_COLORS[0]
+                : AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
         target.style.backgroundColor = color;
         target.textContent = initialsFor(label);
     }
@@ -584,6 +602,13 @@ document.addEventListener('DOMContentLoaded', function() {
             avatarUrlInput.autocomplete = 'off';
             avatarUrlInput.value = existing ? existing.avatarUrl : '';
 
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'color-swatch-input';
+            colorInput.setAttribute('aria-label', 'Color');
+            colorInput.title = 'Color';
+            colorInput.value = (existing && existing.color) || defaultColorFor(labelInput.value || 'A', false);
+
             const confirmBtn = document.createElement('button');
             confirmBtn.type = 'submit';
             confirmBtn.className = 'btn';
@@ -623,6 +648,7 @@ document.addEventListener('DOMContentLoaded', function() {
             form.appendChild(defaultModelInput);
             form.appendChild(reasoningEffortSelect);
             form.appendChild(avatarUrlInput);
+            form.appendChild(colorInput);
             form.appendChild(actions);
             form.appendChild(errorEl);
 
@@ -634,6 +660,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     label: labelInput.value.trim(),
                     baseUrl: baseUrlInput.value.trim(),
                     apiKey: apiKeyInput.value.trim(),
+                    color: colorInput.value,
                     defaultModel: defaultModelInput.value.trim(),
                     defaultReasoningEffort: reasoningEffortSelect.value,
                     avatarUrl: avatarUrlInput.value.trim()
@@ -690,7 +717,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     baseUrl: card.dataset.baseUrl,
                     defaultModel: card.dataset.defaultModel,
                     defaultReasoningEffort: card.dataset.defaultReasoningEffort,
-                    avatarUrl: card.dataset.avatarUrl
+                    avatarUrl: card.dataset.avatarUrl,
+                    color: card.dataset.color
                 };
                 const info = card.querySelector('.project-info');
                 const { form, cancelBtn } = buildProviderForm(existing);
@@ -767,6 +795,13 @@ document.addEventListener('DOMContentLoaded', function() {
             avatarUrlInput.autocomplete = 'off';
             avatarUrlInput.value = profileCard.dataset.avatarUrl;
 
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'color-swatch-input';
+            colorInput.setAttribute('aria-label', 'Cursor color');
+            colorInput.title = 'Cursor color';
+            colorInput.value = profileCard.dataset.cursorColor || defaultColorFor(labelInput.value || 'You', true);
+
             const confirmBtn = document.createElement('button');
             confirmBtn.type = 'submit';
             confirmBtn.className = 'btn';
@@ -792,6 +827,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             form.appendChild(labelInput);
             form.appendChild(avatarUrlInput);
+            form.appendChild(colorInput);
             form.appendChild(actions);
             form.appendChild(errorEl);
 
@@ -804,7 +840,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         label: labelInput.value.trim(),
-                        avatarUrl: avatarUrlInput.value.trim()
+                        avatarUrl: avatarUrlInput.value.trim(),
+                        cursorColor: colorInput.value
                     })
                 })
                 .then(function(response) { return response.json(); })
@@ -850,6 +887,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     apiKey: '',
                     defaultModel: card.dataset.defaultModel,
                     avatarUrl: card.dataset.avatarUrl,
+                    color: card.dataset.color,
                     activeInWorkspace: !currentlyActive
                 })
             })

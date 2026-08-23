@@ -12,7 +12,7 @@ import * as decoding from 'lib0/decoding';
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 
-function buildTheme() {
+function buildTheme(localColor) {
   return EditorView.theme({
     '&': {
       color: 'var(--ink)',
@@ -35,7 +35,7 @@ function buildTheme() {
     '.cm-gutters': { display: 'none' },
     '&.cm-focused': { outline: 'none' },
     '.cm-activeLine': {
-      backgroundColor: 'color-mix(in srgb, var(--presence-you) 14%, transparent)'
+      backgroundColor: `color-mix(in srgb, ${localColor} 14%, transparent)`
     },
     '.cm-ySelectionCaret': {
       borderLeftWidth: '2px'
@@ -67,19 +67,25 @@ if (container) {
     return Math.abs(hash);
   }
   const profileLabel = container.dataset.profileLabel || 'You';
+  // The color chosen in Settings, or the default "you" presence color when
+  // none is set yet. Drives both the local awareness state below (so other
+  // viewers of this single-user app see the chosen color) and buildTheme's
+  // active-line tint, so the two visual "this is you" indicators stay
+  // consistent with each other.
+  const localColor = container.dataset.profileCursorColor || AVATAR_COLORS[0];
   awareness.setLocalStateField('user', {
     name: profileLabel,
     // colorLight is what y-codemirror.next's y-remote-selections.js paints
     // a remote peer's selected text range with. It is NOT optional in
     // practice: when absent, that module derives it as `color + '33'`,
-    // which - because `color` here is a CSS custom-property reference, not
-    // a literal hex - yields the unparseable value `var(--presence-you)33`
-    // and the selection highlight silently disappears. Supplying it
-    // explicitly (using the same color-mix() form buildTheme() above uses
-    // for the active-line highlight) keeps the highlight translucent and
-    // theme-aware.
-    color: AVATAR_COLORS[0],
-    colorLight: `color-mix(in srgb, ${AVATAR_COLORS[0]} 20%, transparent)`
+    // which - when `color` is a CSS custom-property reference rather than a
+    // literal hex - yields an unparseable value and the selection highlight
+    // silently disappears. Supplying it explicitly (using the same
+    // color-mix() form buildTheme() above uses for the active-line
+    // highlight) keeps the highlight translucent and theme-aware for both a
+    // var() reference and a literal hex chosen in Settings.
+    color: localColor,
+    colorLight: `color-mix(in srgb, ${localColor} 20%, transparent)`
   });
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -228,7 +234,7 @@ if (container) {
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       highlightActiveLine(),
-      buildTheme(),
+      buildTheme(localColor),
       EditorView.lineWrapping,
       yCollab(ytext, awareness)
     ]

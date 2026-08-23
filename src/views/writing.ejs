@@ -5,9 +5,9 @@
         <div class="file-path"><%= project.name %> / <%= file.path %></div>
         <div class="editor-header-right">
             <div class="presence-stack" id="presence-stack" aria-label="People in this file">
-                <div class="provider-avatar presence-avatar" data-avatar-target data-skip-brand-lookup="true" data-label="<%= profile.label %>" <% if (profile.avatarUrl) { %>data-avatar-url="<%= profile.avatarUrl %>"<% } %> title="<%= profile.label %>"></div>
+                <div class="provider-avatar presence-avatar" data-avatar-target data-skip-brand-lookup="true" data-label="<%= profile.label %>" data-color="<%= profile.cursorColor || '' %>" <% if (profile.avatarUrl) { %>data-avatar-url="<%= profile.avatarUrl %>"<% } %> title="<%= profile.label %>"></div>
                 <% activeProviders.forEach(function(provider) { %>
-                    <div class="provider-avatar presence-avatar" data-avatar-target data-label="<%= provider.label %>" <% if (provider.avatarUrl) { %>data-avatar-url="<%= provider.avatarUrl %>"<% } %> title="<%= provider.label %>"></div>
+                    <div class="provider-avatar presence-avatar" data-avatar-target data-label="<%= provider.label %>" data-color="<%= provider.color || '' %>" <% if (provider.avatarUrl) { %>data-avatar-url="<%= provider.avatarUrl %>"<% } %> title="<%= provider.label %>"></div>
                 <% }); %>
             </div>
             <div class="editor-actions">
@@ -29,7 +29,7 @@
     </div>
 
     <div class="editor-content">
-        <div id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>" data-profile-label="<%= profile.label %>"></div>
+        <div id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>" data-profile-label="<%= profile.label %>" data-profile-cursor-color="<%= profile.cursorColor || '' %>"></div>
     </div>
 </div>
 <script id="editor-initial-content" type="application/json"><%- JSON.stringify(file.content).replace(/</g, '\\u003c') %></script>

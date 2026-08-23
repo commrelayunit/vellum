@@ -76,6 +76,20 @@ test('avatarUrl round-trips through create and update', () => {
   assert.equal(updated.avatarUrl, 'https://example.com/b.png');
 });
 
+test('color round-trips through create and update, and defaults to null', () => {
+  const { providers } = setup();
+  const created = providers.create({ label: 'A', baseUrl: 'http://a', apiKey: 'key-aaaa' });
+  assert.equal(created.color, null);
+  const withColor = providers.create({
+    label: 'B', baseUrl: 'http://b', apiKey: 'key-bbbb', color: '#c96f48'
+  });
+  assert.equal(withColor.color, '#c96f48');
+  const updated = providers.update(withColor.id, {
+    label: 'B', baseUrl: 'http://b', apiKey: '', defaultModel: null, avatarUrl: null, color: '#5b6eae'
+  });
+  assert.equal(updated.color, '#5b6eae');
+});
+
 test('create() stores ciphertext in the database, never the plaintext key', () => {
   const { db, providers } = setup();
   const created = providers.create({ label: 'A', baseUrl: 'http://a', apiKey: 'sk-super-secret-plaintext' });

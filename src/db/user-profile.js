@@ -5,13 +5,14 @@ function createUserProfileRepo(db) {
       return {
         label: row.label,
         avatarUrl: row.avatar_url,
+        cursorColor: row.cursor_color,
         updatedAt: row.updated_at
       };
     },
-    update({ label, avatarUrl }) {
+    update({ label, avatarUrl, cursorColor }) {
       db.prepare(
-        "UPDATE user_profile SET label = ?, avatar_url = ?, updated_at = datetime('now') WHERE id = 1"
-      ).run(label, avatarUrl || null);
+        "UPDATE user_profile SET label = ?, avatar_url = ?, cursor_color = ?, updated_at = datetime('now') WHERE id = 1"
+      ).run(label, avatarUrl || null, cursorColor || null);
       return this.get();
     }
   };
