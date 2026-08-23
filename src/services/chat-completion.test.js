@@ -82,6 +82,55 @@ test('complete() maps persisted history into the request, translating a prior er
   ]);
 });
 
+test('complete() prepends selections as quoted excerpts before the new user message', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [],
+    userMessage: 'What does this mean?',
+    selections: [{ quotedText: 'Hello\nworld', startLine: 3, endLine: 4 }],
+    onDelta: () => {}
+  });
+  const userRequestMessage = capture.request.messages[capture.request.messages.length - 1];
+  assert.equal(userRequestMessage.role, 'user');
+  assert.match(userRequestMessage.content, /lines 3-4/);
+  assert.match(userRequestMessage.content, /Hello\n> world/);
+  assert.match(userRequestMessage.content, /What does this mean\?$/);
+});
+
+test('complete() applies the same selections formatting to historical messages', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [
+      { role: 'user', content: 'earlier question', selections: [{ quotedText: 'old excerpt', startLine: 1, endLine: 1 }] }
+    ],
+    userMessage: 'follow-up',
+    onDelta: () => {}
+  });
+  const historyMessage = capture.request.messages[1];
+  assert.match(historyMessage.content, /lines 1-1/);
+  assert.match(historyMessage.content, /old excerpt/);
+  assert.match(historyMessage.content, /earlier question$/);
+});
+
+test('complete() leaves message content untouched when selections is absent', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [{ role: 'user', content: 'first' }],
+    userMessage: 'second',
+    onDelta: () => {}
+  });
+  assert.deepEqual(capture.request.messages.slice(1), [
+    { role: 'user', content: 'first' },
+    { role: 'user', content: 'second' }
+  ]);
+});
+
 test('complete() propagates a rejection when the client throws', async () => {
   const client = { chat: { completions: { create: async () => { throw new Error('401 Unauthorized'); } } } };
   const service = createChatCompletionService({ createClient: () => client });
