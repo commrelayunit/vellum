@@ -152,7 +152,33 @@ test('buildTheme is called with the same localColor used for the local awareness
   const source = loadSource();
   assert.match(
     source,
-    /buildTheme\(localColor\)/,
-    'expected buildTheme to receive localColor, so the active-line tint matches the chosen cursor color'
+    /buildTheme\(localColor,\s*showLineNumbers\)/,
+    'expected buildTheme to receive localColor and showLineNumbers'
+  );
+});
+
+test('the local text selection is themed with the same localColor via drawSelection/.cm-selectionBackground', () => {
+  const source = loadSource();
+  assert.match(source, /drawSelection\(\)/, 'expected the drawSelection() extension so the local selection can be themed');
+  assert.match(
+    source,
+    /'\.cm-selectionBackground':\s*\{[^}]*localColor/,
+    'expected .cm-selectionBackground to be themed using localColor, not left as the browser default'
+  );
+});
+
+test('line numbers are included only when the profile preference is enabled', () => {
+  const source = loadSource();
+  const match = source.match(/const showLineNumbers = ([^\n;]+);/);
+  assert.ok(match, 'expected a `const showLineNumbers = ...` assignment reading the profile preference');
+  assert.match(
+    match[1],
+    /container\.dataset\.showLineNumbers === 'true'/,
+    'showLineNumbers should be derived from container.dataset.showLineNumbers'
+  );
+  assert.match(
+    source,
+    /showLineNumbers\s*\?\s*\[lineNumbers\(\)\]\s*:\s*\[\]/,
+    'expected the lineNumbers() extension to be conditionally included based on showLineNumbers'
   );
 });

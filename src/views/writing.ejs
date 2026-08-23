@@ -29,7 +29,7 @@
     </div>
 
     <div class="editor-content">
-        <div id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>" data-profile-label="<%= profile.label %>" data-profile-cursor-color="<%= profile.cursorColor || '' %>"></div>
+        <div id="markdown-editor" class="editor-textarea" data-file-id="<%= file.id %>" data-profile-label="<%= profile.label %>" data-profile-cursor-color="<%= profile.cursorColor || '' %>" data-show-line-numbers="<%= !!profile.showLineNumbers %>"></div>
     </div>
 </div>
 <script id="editor-initial-content" type="application/json"><%- JSON.stringify(file.content).replace(/</g, '\\u003c') %></script>

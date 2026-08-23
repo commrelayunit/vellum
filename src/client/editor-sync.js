@@ -1,6 +1,6 @@
 // src/client/editor-sync.js
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, highlightActiveLine } from '@codemirror/view';
+import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import * as Y from 'yjs';
 import { yCollab } from 'y-codemirror.next';
@@ -12,7 +12,7 @@ import * as decoding from 'lib0/decoding';
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 
-function buildTheme(localColor) {
+function buildTheme(localColor, showLineNumbers) {
   return EditorView.theme({
     '&': {
       color: 'var(--ink)',
@@ -32,13 +32,32 @@ function buildTheme(localColor) {
       fontFamily: "'Courier New', monospace",
       overflow: 'auto'
     },
-    '.cm-gutters': { display: 'none' },
+    // Gutters only exist in the DOM at all when lineNumbers() is included
+    // below (no other gutter-producing extension is registered), so forcing
+    // display:none unconditionally would hide the line numbers we just
+    // asked for - it's only needed for the disabled case. When enabled, kept
+    // small and subtle: muted relative to the main text, no border/
+    // background of its own, so it reads as a light margin rather than UI
+    // chrome.
+    '.cm-gutters': showLineNumbers ? {
+      backgroundColor: 'transparent',
+      border: 'none',
+      color: 'color-mix(in srgb, var(--ink) 40%, transparent)',
+      fontSize: '11px'
+    } : { display: 'none' },
     '&.cm-focused': { outline: 'none' },
     '.cm-activeLine': {
       backgroundColor: `color-mix(in srgb, ${localColor} 14%, transparent)`
     },
     '.cm-ySelectionCaret': {
       borderLeftWidth: '2px'
+    },
+    // Themes the LOCAL user's own text selection (rendered via
+    // drawSelection() below) to match their chosen cursor color, instead of
+    // leaving it as the browser's native ::selection default - matching how
+    // a remote peer's selection is already themed with their color.
+    '.cm-selectionBackground': {
+      backgroundColor: `color-mix(in srgb, ${localColor} 20%, transparent) !important`
     }
   });
 }
@@ -73,6 +92,7 @@ if (container) {
   // active-line tint, so the two visual "this is you" indicators stay
   // consistent with each other.
   const localColor = container.dataset.profileCursorColor || AVATAR_COLORS[0];
+  const showLineNumbers = container.dataset.showLineNumbers === 'true';
   awareness.setLocalStateField('user', {
     name: profileLabel,
     // colorLight is what y-codemirror.next's y-remote-selections.js paints
@@ -234,9 +254,11 @@ if (container) {
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       highlightActiveLine(),
-      buildTheme(localColor),
+      drawSelection(),
+      buildTheme(localColor, showLineNumbers),
       EditorView.lineWrapping,
-      yCollab(ytext, awareness)
+      yCollab(ytext, awareness),
+      ...(showLineNumbers ? [lineNumbers()] : [])
     ]
   });
   window.__vellumEditorView = new EditorView({ state, parent: container });

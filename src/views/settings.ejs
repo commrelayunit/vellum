@@ -5,7 +5,7 @@
         <h2>Settings</h2>
     </div>
 
-    <div class="profile-card" id="profile-card" data-label="<%= profile.label %>" data-avatar-url="<%= profile.avatarUrl || '' %>" data-cursor-color="<%= profile.cursorColor || '' %>">
+    <div class="profile-card" id="profile-card" data-label="<%= profile.label %>" data-avatar-url="<%= profile.avatarUrl || '' %>" data-cursor-color="<%= profile.cursorColor || '' %>" data-show-line-numbers="<%= !!profile.showLineNumbers %>">
         <div class="provider-avatar" data-avatar-target data-skip-brand-lookup="true" data-label="<%= profile.label %>" data-color="<%= profile.cursorColor || '' %>" <% if (profile.avatarUrl) { %>data-avatar-url="<%= profile.avatarUrl %>"<% } %>></div>
         <div class="project-info">
             <h3><%= profile.label %></h3>

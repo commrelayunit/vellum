@@ -50,3 +50,15 @@ test('update() with a null cursorColor clears a previously-set one', () => {
   const cleared = profile.update({ label: 'Velitchko', cursorColor: null });
   assert.equal(cleared.cursorColor, null);
 });
+
+test('get() defaults showLineNumbers to false before any is set', () => {
+  const { profile } = setup();
+  assert.equal(profile.get().showLineNumbers, false);
+});
+
+test('update() persists showLineNumbers as a real boolean and round-trips through get()', () => {
+  const { profile } = setup();
+  const updated = profile.update({ label: 'Velitchko', showLineNumbers: true });
+  assert.equal(updated.showLineNumbers, true);
+  assert.deepEqual(profile.get(), updated);
+});

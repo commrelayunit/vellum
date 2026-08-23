@@ -45,7 +45,7 @@ test('writing.ejs renders file content with no stray whitespace', async () => {
     profile: { label: 'Test Person', avatarUrl: null },
     activeProviders: []
   });
-  assert.match(html, /<div id="markdown-editor" class="editor-textarea" data-file-id="1" data-profile-label="Test Person" data-profile-cursor-color=""><\/div>/);
+  assert.match(html, /<div id="markdown-editor" class="editor-textarea" data-file-id="1" data-profile-label="Test Person" data-profile-cursor-color="" data-show-line-numbers="false"><\/div>/);
   assert.match(html, /<script id="editor-initial-content" type="application\/json">"# Hello"<\/script>/);
 });
 
@@ -57,6 +57,24 @@ test('writing.ejs passes the profile cursorColor through to the editor mount poi
     activeProviders: []
   });
   assert.match(html, /data-profile-cursor-color="#5b6eae"/);
+});
+
+test('writing.ejs passes the profile showLineNumbers preference through to the editor mount point', async () => {
+  const withLineNumbers = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Test Person', avatarUrl: null, showLineNumbers: true },
+    activeProviders: []
+  });
+  assert.match(withLineNumbers, /data-show-line-numbers="true"/);
+
+  const withoutLineNumbers = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Test Person', avatarUrl: null, showLineNumbers: false },
+    activeProviders: []
+  });
+  assert.match(withoutLineNumbers, /data-show-line-numbers="false"/);
 });
 
 test('writing.ejs renders presence avatars with data-color from profile and provider color', async () => {
@@ -169,4 +187,12 @@ test('settings.ejs renders the profile and provider color as data attributes', a
   });
   assert.match(html, /id="profile-card"[^>]*data-cursor-color="#5b6eae"/);
   assert.match(html, /data-provider-id="1"[^>]*data-color="#c96f48"/);
+});
+
+test('settings.ejs renders the profile showLineNumbers preference as a data attribute', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'settings.ejs'), {
+    providers: [],
+    profile: { label: 'Test Person', avatarUrl: null, showLineNumbers: true }
+  });
+  assert.match(html, /id="profile-card"[^>]*data-show-line-numbers="true"/);
 });

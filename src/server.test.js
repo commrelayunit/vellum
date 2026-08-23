@@ -484,6 +484,29 @@ test('POST /api/profile updates cursorColor and round-trips it', async () => {
   server.close();
 });
 
+test('POST /api/profile persists showLineNumbers as a real boolean', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Velitchko', showLineNumbers: true })
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.profile.showLineNumbers, true);
+
+  const offRes = await fetch(`${base}/api/profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Velitchko', showLineNumbers: false })
+  });
+  assert.equal((await offRes.json()).profile.showLineNumbers, false);
+  server.close();
+});
+
 test('POST /api/profile rejects a malformed cursorColor', async () => {
   const server = await listen();
   const { port } = server.address();

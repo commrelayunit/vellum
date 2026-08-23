@@ -935,6 +935,14 @@ document.addEventListener('DOMContentLoaded', function() {
             colorInput.title = 'Cursor color';
             colorInput.value = profileCard.dataset.cursorColor || defaultColorFor(labelInput.value || 'You', true);
 
+            const lineNumbersLabel = document.createElement('label');
+            lineNumbersLabel.className = 'checkbox-field';
+            const lineNumbersInput = document.createElement('input');
+            lineNumbersInput.type = 'checkbox';
+            lineNumbersInput.checked = profileCard.dataset.showLineNumbers === 'true';
+            lineNumbersLabel.appendChild(lineNumbersInput);
+            lineNumbersLabel.appendChild(document.createTextNode('Show line numbers'));
+
             const confirmBtn = document.createElement('button');
             confirmBtn.type = 'submit';
             confirmBtn.className = 'btn';
@@ -961,6 +969,7 @@ document.addEventListener('DOMContentLoaded', function() {
             form.appendChild(labelInput);
             form.appendChild(avatarUrlInput);
             form.appendChild(colorInput);
+            form.appendChild(lineNumbersLabel);
             form.appendChild(actions);
             form.appendChild(errorEl);
 
@@ -974,7 +983,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({
                         label: labelInput.value.trim(),
                         avatarUrl: avatarUrlInput.value.trim(),
-                        cursorColor: colorInput.value
+                        cursorColor: colorInput.value,
+                        showLineNumbers: lineNumbersInput.checked
                     })
                 })
                 .then(function(response) { return response.json(); })

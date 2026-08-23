@@ -726,6 +726,18 @@ body {
   align-self: flex-start;
 }
 
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
 .provider-form-actions {
   display: flex;
   gap: 0.25rem;

@@ -241,7 +241,7 @@ app.post('/api/providers/:id/delete', requireAuth, (req, res) => {
 });
 
 app.post('/api/profile', requireAuth, (req, res) => {
-  const { label, avatarUrl, cursorColor } = req.body;
+  const { label, avatarUrl, cursorColor, showLineNumbers } = req.body;
   if (typeof label !== 'string' || !label.trim()) {
     return res.status(400).json({ success: false, message: 'Label is required' });
   }
@@ -251,7 +251,8 @@ app.post('/api/profile', requireAuth, (req, res) => {
   const profile = userProfileRepo.update({
     label: label.trim(),
     avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
-    cursorColor: typeof cursorColor === 'string' && cursorColor.trim() ? cursorColor.trim() : null
+    cursorColor: typeof cursorColor === 'string' && cursorColor.trim() ? cursorColor.trim() : null,
+    showLineNumbers: showLineNumbers === true
   });
   res.json({ success: true, profile });
 });
