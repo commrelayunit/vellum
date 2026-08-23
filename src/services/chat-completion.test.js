@@ -131,6 +131,46 @@ test('complete() leaves message content untouched when selections is absent', as
   ]);
 });
 
+test('complete() does not throw when a selection entry has a missing or non-string quotedText', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  // Defends against a pre-existing malformed row surviving in the DB from
+  // before src/server.js started normalizing `selections` on ingest - this
+  // must never brick the request that re-processes it.
+  await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [{ role: 'user', content: 'earlier question', selections: [{ startLine: 1, endLine: 1 }] }],
+    userMessage: 'follow-up',
+    selections: [{ startLine: 2, endLine: 2, quotedText: undefined }],
+    onDelta: () => {}
+  });
+  const historyMessage = capture.request.messages[1];
+  const userRequestMessage = capture.request.messages[capture.request.messages.length - 1];
+  assert.match(historyMessage.content, /lines 1-1/);
+  assert.match(userRequestMessage.content, /lines 2-2/);
+  assert.match(userRequestMessage.content, /follow-up$/);
+});
+
+test('complete() formats 2 stacked selections on one message as separate quoted blocks in order', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [],
+    userMessage: 'Compare these two',
+    selections: [
+      { quotedText: 'first excerpt', startLine: 1, endLine: 1 },
+      { quotedText: 'second excerpt', startLine: 5, endLine: 6 }
+    ],
+    onDelta: () => {}
+  });
+  const userRequestMessage = capture.request.messages[capture.request.messages.length - 1];
+  assert.equal(
+    userRequestMessage.content,
+    '> lines 1-1:\n> first excerpt\n\n> lines 5-6:\n> second excerpt\n\nCompare these two'
+  );
+});
+
 test('complete() propagates a rejection when the client throws', async () => {
   const client = { chat: { completions: { create: async () => { throw new Error('401 Unauthorized'); } } } };
   const service = createChatCompletionService({ createClient: () => client });

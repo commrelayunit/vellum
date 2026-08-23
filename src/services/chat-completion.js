@@ -8,8 +8,13 @@ function formatContentWithSelections(content, selections) {
   if (!selections || selections.length === 0) {
     return content;
   }
+  // String(s.quotedText ?? '') defends against a pre-existing malformed row
+  // in the DB (e.g. persisted before src/server.js started normalizing
+  // `selections` on ingest) - without it, a missing/non-string quotedText
+  // throws here on every request that re-processes this file's history,
+  // bricking the conversation until "Clear chat" discards it.
   const quotes = selections
-    .map((s) => `> lines ${s.startLine}-${s.endLine}:\n> ${s.quotedText.replace(/\n/g, '\n> ')}`)
+    .map((s) => `> lines ${s.startLine}-${s.endLine}:\n> ${String(s.quotedText ?? '').replace(/\n/g, '\n> ')}`)
     .join('\n\n');
   return `${quotes}\n\n${content}`;
 }

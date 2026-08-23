@@ -294,7 +294,23 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
     }
 
     trimmedMessage = message.trim();
-    validSelections = Array.isArray(selections) ? selections : [];
+    // Normalize (not just type-check) selections on ingest: a malformed
+    // entry (e.g. missing quotedText) that made it into the DB unchanged
+    // would crash formatContentWithSelections on every subsequent message
+    // to this file, since history.map(toRequestMessage) re-processes every
+    // past selection on every request - bricking the conversation until
+    // "Clear chat". Filtering + coercing here keeps only well-shaped rows.
+    validSelections = Array.isArray(selections)
+      ? selections
+          .filter((s) => s && typeof s.quotedText === 'string')
+          .map((s) => ({
+            quotedText: s.quotedText,
+            startLine: Number(s.startLine) || 0,
+            endLine: Number(s.endLine) || 0,
+            anchor: s.anchor,
+            head: s.head
+          }))
+      : [];
     chatMessagesRepo.create({ fileId: file.id, role: 'user', content: trimmedMessage, selections: validSelections });
     // Cap history sent to the model to the last 40 prior messages, excluding
     // the user message just inserted above (slice(-41, -1): drop the last

@@ -767,6 +767,55 @@ test('POST /api/chat/:fileId/messages ignores a non-array selections field rathe
   server.close();
 });
 
+test('POST /api/chat/:fileId/messages filters out malformed selection entries instead of persisting or crashing on them', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Malformed Selections Project' })
+  });
+  const { file } = await createProject.json();
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: 'key-zzzz' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+  app.locals.chatCompletionService = { complete: async ({ onDelta }) => { onDelta('ok'); return 'ok'; } };
+
+  // A selection entry missing quotedText - this used to persist unchanged
+  // and then permanently crash formatContentWithSelections on every
+  // subsequent message to this file.
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'hi', selections: [{}] })
+  });
+  assert.equal(res.status, 200);
+  await res.text();
+
+  const historyRes = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  const { messages } = await historyRes.json();
+  // An empty selections array round-trips as null (see chatMessagesRepo,
+  // which only persists a non-empty array) - the important thing is that
+  // the malformed {} entry itself is gone, not stored as-is.
+  assert.equal(messages[0].selections, null, 'the malformed entry should be filtered out, not stored as-is');
+
+  // A follow-up message must not be bricked by the (now-filtered) history.
+  const res2 = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'follow up', selections: [] })
+  });
+  assert.equal(res2.status, 200);
+  const body2 = await res2.text();
+  assert.ok(!body2.includes('"type":"error"'), 'the follow-up request must not produce an SSE error frame');
+  server.close();
+});
+
 test('POST /api/chat/:fileId/clear deletes all messages for that file', async () => {
   const server = await listen();
   const { port } = server.address();
