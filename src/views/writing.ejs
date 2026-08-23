@@ -12,13 +12,13 @@
             </div>
             <div class="editor-actions">
                 <button class="btn btn-secondary" id="preview-toggle" aria-label="Show preview" title="Preview">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
                         <circle cx="12" cy="12" r="3"/>
                     </svg>
                 </button>
                 <button class="btn btn-primary" id="export-btn" aria-label="Export file" title="Export">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M12 3v12"/>
                         <path d="M7 10l5 5 5-5"/>
                         <path d="M5 21h14"/>
@@ -45,7 +45,7 @@
             </select>
         <% } %>
         <button class="toggle-chat" id="toggle-chat" aria-label="Collapse chat" aria-expanded="true" title="Collapse chat">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M9 6l6 6-6 6"/>
             </svg>
         </button>
@@ -54,7 +54,7 @@
     <div class="chat-input">
         <input type="text" placeholder="<% if (activeProviders.length > 0) { %>Ask about this file...<% } else { %>Activate a provider in Settings to chat<% } %>" id="chat-input" <% if (activeProviders.length === 0) { %>disabled<% } %>>
         <button class="btn btn-primary" id="send-chat-btn" aria-label="Send message" title="Send" <% if (activeProviders.length === 0) { %>disabled<% } %>>
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M22 2L11 13"/>
                 <path d="M22 2l-7 20-4-9-9-4 20-7z"/>
             </svg>

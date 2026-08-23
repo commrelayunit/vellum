@@ -33,11 +33,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function closeMenu() {
             menuDropdown.classList.remove('open');
+            menuDropdown.hidden = true;
             menuToggle.setAttribute('aria-expanded', 'false');
         }
 
         function openMenu() {
             menuDropdown.classList.add('open');
+            menuDropdown.hidden = false;
             menuToggle.setAttribute('aria-expanded', 'true');
         }
 
