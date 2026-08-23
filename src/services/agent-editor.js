@@ -78,15 +78,15 @@ function createAgentEditSession({ docManager, fileId, providerLabel, providerCol
       // new_string silently deletes old_string while reporting success. This
       // must return BEFORE any document read or mutation.
       if (typeof oldString !== 'string' || typeof newString !== 'string') {
-        return { success: false, message: 'old_string and new_string must both be strings' };
+        return { success: false, message: 'old_string and new_string must both be strings', content: ytext.toString() };
       }
       const current = ytext.toString();
       const occurrences = countOccurrences(current, oldString);
       if (occurrences === 0) {
-        return { success: false, message: 'old_string not found in the document' };
+        return { success: false, message: 'old_string not found in the document', content: current };
       }
       if (occurrences > 1) {
-        return { success: false, message: `old_string matches ${occurrences} times - quote more surrounding context to make it unique` };
+        return { success: false, message: `old_string matches ${occurrences} times - quote more surrounding context to make it unique`, content: current };
       }
 
       ensurePresence();
@@ -128,7 +128,7 @@ function createAgentEditSession({ docManager, fileId, providerLabel, providerCol
         }
       }
 
-      return { success: true, message: 'Edit applied.' };
+      return { success: true, message: 'Edit applied.', content: ytext.toString() };
     },
 
     end() {

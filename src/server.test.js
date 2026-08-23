@@ -1093,6 +1093,58 @@ test('POST /api/chat/:fileId/messages sets X-Accel-Buffering: no so a proxying n
   server.close();
 });
 
+test('POST /api/chat/:fileId/messages emits periodic heartbeat frames while a tool call is in flight, and stops after it ends', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Heartbeat Project' })
+  });
+  const { file } = await createProject.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Heartbeat Provider', baseUrl: 'http://fake', apiKey: 'key-hhhh' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Heartbeat Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+
+  app.locals.chatCompletionService = {
+    complete: async ({ onToolStart, onToolEnd }) => {
+      onToolStart('edit_document');
+      t.mock.timers.tick(15000);
+      t.mock.timers.tick(15000);
+      onToolEnd('edit_document', true);
+      // A tick after the tool call ends must not produce another heartbeat -
+      // this is what proves the interval was actually cleared, not just
+      // outlived by the response finishing first.
+      t.mock.timers.tick(15000);
+      return 'Done';
+    }
+  };
+
+  const res = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Make a big edit' })
+  });
+  const body = await res.text();
+  const heartbeatCount = (body.match(/"type":"heartbeat"/g) || []).length;
+  assert.equal(heartbeatCount, 2);
+  assert.match(body, /"type":"tool-start"/);
+  assert.match(body, /"type":"tool-end"/);
+  assert.match(body, /"type":"done"/);
+  server.close();
+});
+
 test('POST /api/chat/:fileId/messages caps the history sent to the completion service to the last 40 prior messages', async () => {
   const server = await listen();
   const { port } = server.address();

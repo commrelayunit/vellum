@@ -29,6 +29,14 @@ test('applyEdit() replaces a unique match and reports success', async () => {
   session.end();
 });
 
+test('applyEdit() returns the post-edit document content on success', async () => {
+  const { docManager } = setup('Hello world');
+  const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkDelayMs: 0 });
+  const result = await session.applyEdit('world', 'there');
+  assert.equal(result.content, 'Hello there');
+  session.end();
+});
+
 test('applyEdit() inserts the replacement in the specified chunk size', async () => {
   const { docManager } = setup('X');
   const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkSize: 2, chunkDelayMs: 0 });
@@ -44,6 +52,7 @@ test('applyEdit() fails without mutating the document when old_string is not fou
   const result = await session.applyEdit('goodbye', 'hi');
   assert.equal(result.success, false);
   assert.match(result.message, /not found/);
+  assert.equal(result.content, 'Hello world');
   assert.equal(session.getCurrentContent(), 'Hello world');
   session.end();
 });
@@ -54,6 +63,7 @@ test('applyEdit() fails without mutating the document when old_string matches mo
   const result = await session.applyEdit('cat', 'dog');
   assert.equal(result.success, false);
   assert.match(result.message, /matches 3 times/);
+  assert.equal(result.content, 'cat cat cat');
   assert.equal(session.getCurrentContent(), 'cat cat cat');
   session.end();
 });
@@ -91,6 +101,7 @@ test('applyEdit() rejects a non-string old_string without hanging or mutating th
   const result = await session.applyEdit(2024, '2025');
   assert.equal(result.success, false);
   assert.match(result.message, /must both be strings/);
+  assert.equal(result.content, 'Written in 2024 by me.');
   assert.equal(session.getCurrentContent(), 'Written in 2024 by me.');
   session.end();
 });

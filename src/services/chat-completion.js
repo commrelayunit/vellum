@@ -138,10 +138,19 @@ function createChatCompletionService({ createClient } = {}) {
             result = { success: false, message: err && err.message ? err.message : String(err) };
           }
           if (onToolEnd) onToolEnd(call.name, !!(result && result.success));
+          let toolResultContent = (result && result.message) || (result && result.success ? 'Edit applied.' : 'Edit failed.');
+          // Without this, a second edit_document call in the same turn is
+          // checked by the model against the stale snapshot from the system
+          // prompt rather than what the first call actually produced, so a
+          // second edit re-quoting the model's own just-written text can
+          // fail to match.
+          if (result && typeof result.content === 'string') {
+            toolResultContent += `\n\nCurrent document content:\n\n${result.content}`;
+          }
           messages.push({
             role: 'tool',
             tool_call_id: call.id || `call_${i}`,
-            content: (result && result.message) || (result && result.success ? 'Edit applied.' : 'Edit failed.')
+            content: toolResultContent
           });
         }
       }

@@ -341,6 +341,14 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
       providerLabel: provider.label,
       providerColor: provider.color
     });
+    // A large edit_document call (many chunks at agent-editor.js's
+    // chunkSize/chunkDelayMs) can run for a while without any other SSE
+    // frame going out, risking a dropped connection at a reverse proxy's
+    // default ~60s read timeout (docs/DOCKER.md's own sample nginx config
+    // has no proxy_read_timeout override). 15s gives ~4x headroom under
+    // that default. Unrecognized frame types are already silently ignored
+    // by src/public/js/main.js's SSE handler, so no client change is needed.
+    let heartbeatTimer = null;
     try {
       const fullText = await req.app.locals.chatCompletionService.complete({
         apiKey,
@@ -353,8 +361,17 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
         userMessage: trimmedMessage,
         selections: validSelections,
         onDelta: (delta) => writeSseEvent(res, { type: 'delta', text: delta }),
-        onToolStart: (tool) => writeSseEvent(res, { type: 'tool-start', tool }),
-        onToolEnd: (tool, success) => writeSseEvent(res, { type: 'tool-end', tool, success }),
+        onToolStart: (tool) => {
+          writeSseEvent(res, { type: 'tool-start', tool });
+          heartbeatTimer = setInterval(() => writeSseEvent(res, { type: 'heartbeat' }), 15000);
+        },
+        onToolEnd: (tool, success) => {
+          if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+          }
+          writeSseEvent(res, { type: 'tool-end', tool, success });
+        },
         executeTool: (name, args) => {
           if (name !== 'edit_document') {
             return Promise.resolve({ success: false, message: `Unknown tool: ${name}` });
@@ -365,6 +382,7 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
       chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label });
       writeSseEvent(res, { type: 'done' });
     } finally {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       agentSession.end();
     }
   } catch (err) {

@@ -285,6 +285,35 @@ test('complete() feeds a failed tool result back to the model as the tool messag
   assert.equal(toolMessage.content, 'old_string not found in the document');
 });
 
+test('complete() appends the tool result\'s current document content to the tool message so a second edit_document call sees fresh state', async () => {
+  const round1 = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'edit_document', arguments: '{"old_string":"foo","new_string":"bar"}' } }] } }] }
+  ];
+  const round2 = [{ choices: [{ delta: { content: 'Done!' } }] }];
+  const capture = {};
+  const client = {
+    chat: {
+      completions: {
+        create: async (request) => {
+          if (!capture.firstRequest) capture.firstRequest = request;
+          else capture.secondRequest = request;
+          const chunks = capture.secondRequest ? round2 : round1;
+          return { [Symbol.asyncIterator]: async function* () { for (const c of chunks) yield c; } };
+        }
+      }
+    }
+  };
+  const service = createChatCompletionService({ createClient: () => client });
+  await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: 'foo',
+    history: [], userMessage: 'change foo to bar',
+    onDelta: () => {},
+    executeTool: async () => ({ success: true, message: 'Edit applied.', content: 'bar' })
+  });
+  const toolMessage = capture.secondRequest.messages.find((m) => m.role === 'tool');
+  assert.equal(toolMessage.content, 'Edit applied.\n\nCurrent document content:\n\nbar');
+});
+
 test('complete() stops attaching tools on the final allowed round, forcing a plain reply', async () => {
   // A model that keeps calling the tool every round should be cut off after
   // the round cap, with the final request omitting `tools` so the API
