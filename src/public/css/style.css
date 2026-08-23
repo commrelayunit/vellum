@@ -757,6 +757,63 @@ body {
   opacity: 0.7;
 }
 
+.message-reference {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--ink) 65%, transparent);
+  border-left: 2px solid var(--ink);
+  padding: 0.125rem 0.4rem;
+  margin-bottom: 0.25rem;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-reference:hover {
+  opacity: 0.7;
+}
+
+#chat-pending-references {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+}
+
+#chat-pending-references:empty {
+  display: none;
+}
+
+.reference-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 11px;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+
+.reference-chip-remove:hover {
+  opacity: 0.6;
+}
+
 .provider-form-actions {
   display: flex;
   gap: 0.25rem;

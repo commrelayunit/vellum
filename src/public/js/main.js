@@ -182,30 +182,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (chatInput && sendChatBtn && chatMessages && editorForChat) {
         const fileId = editorForChat.dataset.fileId;
+        const pendingReferencesEl = document.getElementById('chat-pending-references');
+        let pendingReferences = [];
+
+        function truncateSnippet(text) {
+            const trimmed = text.trim().replace(/\s+/g, ' ');
+            return trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed;
+        }
+
+        function renderPendingReferences() {
+            if (!pendingReferencesEl) return;
+            pendingReferencesEl.innerHTML = '';
+            pendingReferences.forEach(function(ref, index) {
+                const chip = document.createElement('span');
+                chip.className = 'reference-chip';
+                chip.textContent = `L${ref.startLine}-${ref.endLine}: "${truncateSnippet(ref.quotedText)}"`;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'reference-chip-remove';
+                removeBtn.setAttribute('aria-label', 'Remove this reference');
+                removeBtn.textContent = '×';
+                removeBtn.addEventListener('click', function() {
+                    pendingReferences.splice(index, 1);
+                    renderPendingReferences();
+                });
+
+                chip.appendChild(removeBtn);
+                pendingReferencesEl.appendChild(chip);
+            });
+        }
+
+        document.addEventListener('vellum:selection-referenced', function(e) {
+            pendingReferences.push(e.detail);
+            renderPendingReferences();
+        });
 
         function formatTime(isoString) {
             const date = isoString ? new Date(isoString) : new Date();
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
-        function addMessage(author, content, className, timeString) {
+        function addMessage(author, content, className, timeString, selections) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${className || ''}`;
 
             const authorDiv = document.createElement('div');
             authorDiv.className = 'message-author';
             authorDiv.textContent = author;
+            messageDiv.appendChild(authorDiv);
+
+            (selections || []).forEach(function(ref) {
+                const quoteEl = document.createElement('div');
+                quoteEl.className = 'message-reference';
+                quoteEl.textContent = `L${ref.startLine}-${ref.endLine}: "${truncateSnippet(ref.quotedText)}"`;
+                quoteEl.tabIndex = 0;
+                quoteEl.setAttribute('role', 'button');
+                quoteEl.addEventListener('click', function() {
+                    if (typeof window.__vellumJumpToReference === 'function') {
+                        window.__vellumJumpToReference(ref.anchor, ref.head);
+                    }
+                });
+                messageDiv.appendChild(quoteEl);
+            });
 
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
             contentDiv.textContent = content;
+            messageDiv.appendChild(contentDiv);
 
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
             timeDiv.textContent = timeString || formatTime();
-
-            messageDiv.appendChild(authorDiv);
-            messageDiv.appendChild(contentDiv);
             messageDiv.appendChild(timeDiv);
 
             chatMessages.appendChild(messageDiv);
@@ -220,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!data.success) return;
                     data.messages.forEach(function(message) {
                         if (message.role === 'user') {
-                            addMessage('You', message.content, '', formatTime(message.createdAt));
+                            addMessage('You', message.content, '', formatTime(message.createdAt), message.selections);
                         } else if (message.role === 'assistant') {
                             addMessage(message.providerLabel || 'Agent', message.content, 'agent-message', formatTime(message.createdAt));
                         } else {
@@ -250,10 +298,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const message = chatInput.value.trim();
             if (!message || !chatProviderSelect) return;
 
-            addMessage('You', message, '');
+            const selectionsForSend = pendingReferences.slice();
+            addMessage('You', message, '', undefined, selectionsForSend);
             chatInput.value = '';
             chatInput.disabled = true;
             setButtonLoading(sendChatBtn, true);
+            pendingReferences = [];
+            renderPendingReferences();
 
             const providerId = chatProviderSelect.value;
             const providerLabel = chatProviderSelect.options[chatProviderSelect.selectedIndex].textContent;
@@ -262,7 +313,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/api/chat/${fileId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ providerId, message })
+                body: JSON.stringify({ providerId, message, selections: selectionsForSend })
             })
             .then(function(response) {
                 if (!isSseResponse(response)) {
