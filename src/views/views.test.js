@@ -70,6 +70,16 @@ test('writing.ejs renders presence avatars with data-color from profile and prov
   assert.match(html, /data-label="Active Agent"[^>]*data-color="#c96f48"/);
 });
 
+test('writing.ejs renders a clear-chat button', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    profile: { label: 'Test Person', avatarUrl: null },
+    activeProviders: []
+  });
+  assert.match(html, /id="clear-chat-btn"/);
+});
+
 test('writing.ejs renders real presence data, not a hardcoded mock', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },

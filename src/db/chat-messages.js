@@ -18,6 +18,9 @@ function createChatMessagesRepo(db) {
         .prepare('INSERT INTO chat_messages (file_id, role, content, provider_label) VALUES (?, ?, ?, ?)')
         .run(fileId, role, content, providerLabel || null);
       return toViewModel(db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(info.lastInsertRowid));
+    },
+    deleteForFile(fileId) {
+      db.prepare('DELETE FROM chat_messages WHERE file_id = ?').run(fileId);
     }
   };
 }

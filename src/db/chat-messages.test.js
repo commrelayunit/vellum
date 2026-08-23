@@ -50,3 +50,12 @@ test('create() persists a role of "error" for failed requests', () => {
   const message = chatMessages.create({ fileId: fileA.id, role: 'error', content: 'Request failed: 401 Unauthorized' });
   assert.equal(message.role, 'error');
 });
+
+test("deleteForFile() removes only that file's messages, leaving other files' history intact", () => {
+  const { chatMessages, fileA, fileB } = setup();
+  chatMessages.create({ fileId: fileA.id, role: 'user', content: 'For A' });
+  chatMessages.create({ fileId: fileB.id, role: 'user', content: 'For B' });
+  chatMessages.deleteForFile(fileA.id);
+  assert.deepEqual(chatMessages.listForFile(fileA.id), []);
+  assert.deepEqual(chatMessages.listForFile(fileB.id).map((m) => m.content), ['For B']);
+});

@@ -330,8 +330,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         loadHistory();
+
+        const clearChatBtn = document.getElementById('clear-chat-btn');
+        if (clearChatBtn) {
+            clearChatBtn.addEventListener('click', function() {
+                if (!window.confirm('Clear all chat history for this file? This cannot be undone.')) return;
+                setButtonLoading(clearChatBtn, true);
+                fetch(`/api/chat/${fileId}/clear`, { method: 'POST' })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        setButtonLoading(clearChatBtn, false);
+                        if (data.success) {
+                            chatMessages.innerHTML = '';
+                        }
+                    })
+                    .catch(function() {
+                        setButtonLoading(clearChatBtn, false);
+                    });
+            });
+        }
     }
-    
+
     // Simple markdown to HTML converter
     function escapeHtml(text) {
         return text

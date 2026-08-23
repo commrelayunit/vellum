@@ -666,6 +666,73 @@ test('GET /api/chat/:fileId/messages returns an empty list for a file with no hi
   server.close();
 });
 
+test('POST /api/chat/:fileId/clear deletes all messages for that file', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createProject = await fetch(`${base}/api/projects`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Clear Project' })
+  });
+  const { file } = await createProject.json();
+
+  app.locals.chatCompletionService = {
+    complete: async ({ onDelta }) => { onDelta('Hi'); return 'Hi'; }
+  };
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: 'key-zzzz' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Fake Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+  const sendRes = await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Hello' })
+  });
+  await sendRes.text();
+
+  const beforeClear = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  assert.equal((await beforeClear.json()).messages.length, 2);
+
+  const clearRes = await fetch(`${base}/api/chat/${file.id}/clear`, {
+    method: 'POST', headers: { Cookie: cookie }
+  });
+  assert.equal(clearRes.status, 200);
+  assert.equal((await clearRes.json()).success, true);
+
+  const afterClear = await fetch(`${base}/api/chat/${file.id}/messages`, { headers: { Cookie: cookie } });
+  assert.deepEqual((await afterClear.json()).messages, []);
+  server.close();
+});
+
+test('POST /api/chat/:fileId/clear 404s for an unknown file', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/api/chat/999999/clear`, {
+    method: 'POST', headers: { Cookie: cookie }
+  });
+  assert.equal(res.status, 404);
+  server.close();
+});
+
+test('unauthenticated POST /api/chat/:fileId/clear redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/chat/1/clear`, {
+    method: 'POST',
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get('location'), /\/login/);
+  server.close();
+});
+
 test('POST /api/chat/:fileId/messages persists the user message and the streamed assistant reply', async () => {
   const server = await listen();
   const { port } = server.address();

@@ -348,6 +348,16 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   res.end();
 });
 
+app.post('/api/chat/:fileId/clear', requireAuth, (req, res) => {
+  const fileId = parseInt(req.params.fileId, 10);
+  const file = filesRepo.getById(fileId);
+  if (!file) {
+    return res.status(404).json({ success: false, message: 'File not found' });
+  }
+  chatMessagesRepo.deleteForFile(fileId);
+  res.json({ success: true });
+});
+
 function authenticateUpgrade(req) {
   return new Promise((resolve) => {
     const fakeRes = { getHeader() {}, setHeader() {}, end() {}, writeHead() {} };
