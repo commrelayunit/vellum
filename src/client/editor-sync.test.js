@@ -39,6 +39,24 @@ function extractOpenHandlerBody(source) {
   assert.fail("could not find the end of the 'open' handler body");
 }
 
+// Returns the source text of a top-level `function <name>(...) { ... }`
+// declaration, found by brace matching from its opening `{`.
+function extractFunctionSource(source, functionName) {
+  const marker = `function ${functionName}(`;
+  const markerIndex = source.indexOf(marker);
+  assert.notEqual(markerIndex, -1, `expected a function named ${functionName}`);
+  const bodyStart = source.indexOf('{', markerIndex);
+  let depth = 0;
+  for (let i = bodyStart; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) return source.slice(markerIndex, i + 1);
+    }
+  }
+  assert.fail(`could not find the end of ${functionName}`);
+}
+
 test("the ydoc 'update' listener is registered unconditionally, not inside the WebSocket 'open' handler", () => {
   const source = loadSource();
   const openBody = extractOpenHandlerBody(source);
@@ -181,4 +199,73 @@ test('line numbers are included only when the profile preference is enabled', ()
     /showLineNumbers\s*\?\s*\[lineNumbers\(\)\]\s*:\s*\[\]/,
     'expected the lineNumbers() extension to be conditionally included based on showLineNumbers'
   );
+});
+
+test('buildSelectionReference captures quoted text, line range, and Yjs relative positions', () => {
+  const Y = require('yjs');
+  const { EditorState } = require('@codemirror/state');
+  const source = loadSource();
+  const fnSource = extractFunctionSource(source, 'buildSelectionReference');
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source function
+  const buildSelectionReference = new Function('Y', `return (${fnSource});`)(Y);
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  ytext.insert(0, 'Hello\nworld\nagain');
+  const state = EditorState.create({ doc: ytext.toString() });
+
+  const ref = buildSelectionReference(state, ytext, 0, 11);
+  assert.equal(ref.quotedText, 'Hello\nworld');
+  assert.equal(ref.startLine, 1);
+  assert.equal(ref.endLine, 2);
+  assert.ok(ref.anchor);
+  assert.ok(ref.head);
+
+  const resolved = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(ref.anchor), ydoc);
+  assert.equal(resolved.index, 0);
+});
+
+test('resolveJumpTarget resolves a valid selection to its current absolute offsets, accounting for edits since', () => {
+  const Y = require('yjs');
+  const source = loadSource();
+  const fnSource = extractFunctionSource(source, 'resolveJumpTarget');
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source function
+  const resolveJumpTarget = new Function('Y', `return (${fnSource});`)(Y);
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  ytext.insert(0, 'Hello world');
+  const anchorJSON = Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, 6));
+  const headJSON = Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, 11));
+
+  // A real concurrent edit before the referenced range - relative positions
+  // exist precisely to survive this.
+  ytext.insert(0, 'Prefix: ');
+
+  assert.deepEqual(resolveJumpTarget(ydoc, ytext, anchorJSON, headJSON), { from: 14, to: 19 });
+});
+
+test('resolveJumpTarget returns null when resolved against an unrelated document lineage', () => {
+  const Y = require('yjs');
+  const source = loadSource();
+  const fnSource = extractFunctionSource(source, 'resolveJumpTarget');
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source function
+  const resolveJumpTarget = new Function('Y', `return (${fnSource});`)(Y);
+
+  const ydocA = new Y.Doc();
+  const ytextA = ydocA.getText('content');
+  ytextA.insert(0, 'Hello world');
+  const anchorJSON = Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytextA, 0));
+  const headJSON = Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytextA, 5));
+
+  const ydocB = new Y.Doc();
+  const ytextB = ydocB.getText('content');
+  ytextB.insert(0, 'Unrelated content');
+
+  assert.equal(resolveJumpTarget(ydocB, ytextB, anchorJSON, headJSON), null);
+});
+
+test('window.__vellumJumpToReference is exposed alongside window.__vellumEditorView', () => {
+  const source = loadSource();
+  assert.match(source, /window\.__vellumJumpToReference = function/);
 });

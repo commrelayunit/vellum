@@ -738,6 +738,25 @@ body {
   cursor: pointer;
 }
 
+.selection-reference-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0.2rem;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--ink);
+  z-index: 300;
+}
+
+.selection-reference-btn:hover {
+  opacity: 0.7;
+}
+
 .provider-form-actions {
   display: flex;
   gap: 0.25rem;

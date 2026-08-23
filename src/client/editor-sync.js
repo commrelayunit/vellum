@@ -1,6 +1,6 @@
 // src/client/editor-sync.js
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers } from '@codemirror/view';
+import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers, ViewPlugin } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import * as Y from 'yjs';
 import { yCollab } from 'y-codemirror.next';
@@ -58,6 +58,88 @@ function buildTheme(localColor, showLineNumbers) {
     // a remote peer's selection is already themed with their color.
     '.cm-selectionBackground': {
       backgroundColor: `color-mix(in srgb, ${localColor} 20%, transparent) !important`
+    }
+  });
+}
+
+function buildSelectionReference(state, ytext, from, to) {
+  return {
+    quotedText: state.sliceDoc(from, to),
+    startLine: state.doc.lineAt(from).number,
+    endLine: state.doc.lineAt(to).number,
+    anchor: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, from)),
+    head: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, to))
+  };
+}
+
+function resolveJumpTarget(ydoc, ytext, anchorJSON, headJSON) {
+  const anchorPos = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(anchorJSON), ydoc);
+  const headPos = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(headJSON), ydoc);
+  if (!anchorPos || !headPos || anchorPos.type !== ytext || headPos.type !== ytext) {
+    return null;
+  }
+  return {
+    from: Math.min(anchorPos.index, headPos.index),
+    to: Math.max(anchorPos.index, headPos.index)
+  };
+}
+
+// Shows a small floating button near a non-empty selection; clicking it
+// turns that selection into a chat reference. Deletion of the referenced
+// content is not specially detected here - resolveJumpTarget (used by
+// window.__vellumJumpToReference at click-to-jump time, not here) handles
+// that gracefully on its own.
+function selectionReferencePlugin(ytext) {
+  return ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.view = view;
+      this.button = document.createElement('button');
+      this.button.type = 'button';
+      this.button.className = 'selection-reference-btn';
+      this.button.setAttribute('aria-label', 'Reference this selection in chat');
+      this.button.title = 'Reference in chat';
+      this.button.innerHTML = '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+      this.button.style.display = 'none';
+      this.button.style.position = 'fixed';
+      // mousedown, not click: fires before the editor's own selection/blur
+      // handling can clear the selection (and hide this button) out from
+      // under a pending click.
+      this.button.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const sel = this.view.state.selection.main;
+        if (sel.from === sel.to) return;
+        const reference = buildSelectionReference(this.view.state, ytext, sel.from, sel.to);
+        document.dispatchEvent(new CustomEvent('vellum:selection-referenced', { detail: reference }));
+        this.button.style.display = 'none';
+      });
+      document.body.appendChild(this.button);
+      this.updateVisibility();
+    }
+
+    updateVisibility() {
+      const sel = this.view.state.selection.main;
+      if (sel.from === sel.to || !this.view.hasFocus) {
+        this.button.style.display = 'none';
+        return;
+      }
+      const coords = this.view.coordsAtPos(sel.to);
+      if (!coords) {
+        this.button.style.display = 'none';
+        return;
+      }
+      this.button.style.display = 'flex';
+      this.button.style.top = `${coords.top - 26}px`;
+      this.button.style.left = `${coords.left}px`;
+    }
+
+    update(update) {
+      if (update.selectionSet || update.focusChanged || update.geometryChanged) {
+        this.updateVisibility();
+      }
+    }
+
+    destroy() {
+      this.button.remove();
     }
   });
 }
@@ -258,8 +340,19 @@ if (container) {
       buildTheme(localColor, showLineNumbers),
       EditorView.lineWrapping,
       yCollab(ytext, awareness),
+      selectionReferencePlugin(ytext),
       ...(showLineNumbers ? [lineNumbers()] : [])
     ]
   });
   window.__vellumEditorView = new EditorView({ state, parent: container });
+
+  window.__vellumJumpToReference = function(anchorJSON, headJSON) {
+    const target = resolveJumpTarget(ydoc, ytext, anchorJSON, headJSON);
+    if (!target) return;
+    window.__vellumEditorView.dispatch({
+      selection: { anchor: target.from, head: target.to },
+      scrollIntoView: true
+    });
+    window.__vellumEditorView.focus();
+  };
 }
