@@ -179,3 +179,141 @@ test('complete() propagates a rejection when the client throws', async () => {
     /401 Unauthorized/
   );
 });
+
+function toolCallingClient(rounds) {
+  let call = 0;
+  return {
+    chat: {
+      completions: {
+        create: async () => {
+          const chunks = rounds[call];
+          call += 1;
+          return {
+            [Symbol.asyncIterator]: async function* () {
+              for (const chunk of chunks) yield chunk;
+            }
+          };
+        }
+      }
+    }
+  };
+}
+
+test('complete() executes a tool call and feeds the result back for a second round', async () => {
+  const round1 = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'edit_document', arguments: '' } }] } }] },
+    { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"old_string":"foo","new' } }] } }] },
+    { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '_string":"bar"}' } }] } }] }
+  ];
+  const round2 = [
+    { choices: [{ delta: { content: 'Done!' } }] }
+  ];
+  const service = createChatCompletionService({ createClient: () => toolCallingClient([round1, round2]) });
+
+  const executedCalls = [];
+  const toolEvents = [];
+  const deltas = [];
+  const fullText = await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: 'foo',
+    history: [], userMessage: 'change foo to bar',
+    onDelta: (d) => deltas.push(d),
+    onToolStart: (tool) => toolEvents.push(['start', tool]),
+    onToolEnd: (tool, success) => toolEvents.push(['end', tool, success]),
+    executeTool: async (name, args) => {
+      executedCalls.push({ name, args });
+      return { success: true, message: 'Edit applied.' };
+    }
+  });
+
+  assert.deepEqual(executedCalls, [{ name: 'edit_document', args: { old_string: 'foo', new_string: 'bar' } }]);
+  assert.deepEqual(toolEvents, [['start', 'edit_document'], ['end', 'edit_document', true]]);
+  assert.equal(fullText, 'Done!');
+  assert.deepEqual(deltas, ['Done!']);
+});
+
+test('complete() returns the reply directly when the model makes no tool call', async () => {
+  const round1 = [{ choices: [{ delta: { content: 'Just a reply.' } }] }];
+  const service = createChatCompletionService({ createClient: () => toolCallingClient([round1]) });
+  const executedCalls = [];
+  const fullText = await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [], userMessage: 'hi',
+    onDelta: () => {},
+    executeTool: async (name, args) => { executedCalls.push({ name, args }); return { success: true, message: '' }; }
+  });
+  assert.equal(fullText, 'Just a reply.');
+  assert.deepEqual(executedCalls, []);
+});
+
+test('complete() feeds a failed tool result back to the model as the tool message content', async () => {
+  const round1 = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'edit_document', arguments: '{"old_string":"missing","new_string":"x"}' } }] } }] }
+  ];
+  const round2 = [{ choices: [{ delta: { content: 'Could not find that text.' } }] }];
+  const capture = {};
+  const client = {
+    chat: {
+      completions: {
+        create: async (request) => {
+          if (!capture.firstRequest) capture.firstRequest = request;
+          else capture.secondRequest = request;
+          const chunks = capture.secondRequest ? round2 : round1;
+          return { [Symbol.asyncIterator]: async function* () { for (const c of chunks) yield c; } };
+        }
+      }
+    }
+  };
+  const service = createChatCompletionService({ createClient: () => client });
+  const fullText = await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [], userMessage: 'edit it',
+    onDelta: () => {},
+    executeTool: async () => ({ success: false, message: 'old_string not found in the document' })
+  });
+  assert.equal(fullText, 'Could not find that text.');
+  const toolMessage = capture.secondRequest.messages.find((m) => m.role === 'tool');
+  assert.equal(toolMessage.content, 'old_string not found in the document');
+});
+
+test('complete() stops attaching tools on the final allowed round, forcing a plain reply', async () => {
+  // A model that keeps calling the tool every round should be cut off after
+  // the round cap, with the final request omitting `tools` so the API
+  // cannot return another tool call.
+  const alwaysToolCall = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_x', type: 'function', function: { name: 'edit_document', arguments: '{"old_string":"a","new_string":"b"}' } }] } }] }
+  ];
+  const finalPlain = [{ choices: [{ delta: { content: 'Giving up on further edits.' } }] }];
+  const requests = [];
+  const client = {
+    chat: {
+      completions: {
+        create: async (request) => {
+          requests.push(request);
+          const chunks = requests.length <= 5 ? alwaysToolCall : finalPlain;
+          return { [Symbol.asyncIterator]: async function* () { for (const c of chunks) yield c; } };
+        }
+      }
+    }
+  };
+  const service = createChatCompletionService({ createClient: () => client });
+  const fullText = await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [], userMessage: 'keep editing',
+    onDelta: () => {},
+    executeTool: async () => ({ success: true, message: 'Edit applied.' })
+  });
+  assert.equal(requests.length, 6);
+  assert.equal('tools' in requests[5], false, 'the 6th and final request must not attach tools');
+  assert.equal(fullText, 'Giving up on further edits.');
+});
+
+test('complete() works with no executeTool/onToolStart/onToolEnd passed, matching today\'s callers', async () => {
+  const chunks = [{ choices: [{ delta: { content: 'plain reply' } }] }];
+  const service = createChatCompletionService({ createClient: () => fakeClient(chunks) });
+  const fullText = await service.complete({
+    apiKey: 'key', baseUrl: 'http://x', model: 'gpt-5',
+    filePath: 'a.md', fileContent: '# A', history: [], userMessage: 'hi',
+    onDelta: () => {}
+  });
+  assert.equal(fullText, 'plain reply');
+});
