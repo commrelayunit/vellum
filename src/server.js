@@ -15,6 +15,9 @@ const { createUserProfileRepo } = require('./db/user-profile');
 const { createChatMessagesRepo } = require('./db/chat-messages');
 const { createChatCompletionService } = require('./services/chat-completion');
 const { requireAuth, verifyPassword } = require('./auth/middleware');
+const { WebSocketServer } = require('ws');
+const { createSyncDocManager } = require('./services/sync-doc-manager');
+const { handleSyncConnection } = require('./services/sync-connection');
 
 const db = createConnection(config.dbPath);
 migrate(db);
@@ -24,6 +27,7 @@ const secrets = createSecretsService(config.encryptionKey);
 const providersRepo = createProvidersRepo(db, secrets);
 const userProfileRepo = createUserProfileRepo(db);
 const chatMessagesRepo = createChatMessagesRepo(db);
+const syncDocManager = createSyncDocManager({ filesRepo });
 
 const app = express();
 app.locals.chatCompletionService = createChatCompletionService();
@@ -35,12 +39,13 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(session({
+const sessionMiddleware = session({
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: 'strict' }
-}));
+});
+app.use(sessionMiddleware);
 
 app.get('/login', (req, res) => {
   res.render('login', { error: null });
@@ -122,7 +127,17 @@ app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
   if (typeof content !== 'string') {
     return res.status(400).json({ success: false, message: 'content must be a string' });
   }
-  const success = filesRepo.updateContent(fileId, content);
+  // Use updateYjsSnapshot (with contentYjs explicitly nulled) rather than
+  // updateContent here. This is the fallback plain-text-only save path,
+  // used when the WebSocket sync isn't connected - it must not leave a
+  // stale content_yjs snapshot in place that no longer matches the content
+  // being saved here. sync-doc-manager.js's loadInitialContent already
+  // falls back to seeding a fresh Y.Doc from plain-text content whenever
+  // content_yjs is null, so nulling it here guarantees the next WebSocket
+  // connection re-seeds from this truly-current content instead of loading
+  // stale (possibly empty) Yjs state - closing off the empty-doc race that
+  // the client-side fix in editor-sync.js also addresses.
+  const success = filesRepo.updateYjsSnapshot(fileId, { content, contentYjs: null });
   if (success) {
     res.json({ success: true, message: 'File saved successfully' });
   } else {
@@ -297,6 +312,70 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   res.end();
 });
 
+function authenticateUpgrade(req) {
+  return new Promise((resolve) => {
+    const fakeRes = { getHeader() {}, setHeader() {}, end() {}, writeHead() {} };
+    sessionMiddleware(req, fakeRes, () => {
+      resolve(!!(req.session && req.session.authenticated));
+    });
+  });
+}
+
+function attachWebSocketServer(httpServer) {
+  const wss = new WebSocketServer({ noServer: true });
+  httpServer.on('upgrade', async (req, socket, head) => {
+    // MUST be the very first statement, before any `await` and before any
+    // write to the socket. A raw upgrade socket has no 'error' listener of
+    // its own, and Node's EventEmitter rethrows an unhandled 'error' event
+    // as an uncaught exception that kills the process. Two things in this
+    // handler open that window: the `await authenticateUpgrade(req)` below
+    // (during which nothing is listening), and the `socket.end(...)`
+    // rejection replies (writing to an already-reset peer). Any client can
+    // reach both without a session cookie, just by opening a TCP
+    // connection to /ws/files/:id and resetting it mid-handshake — so
+    // without this listener, an unauthenticated remote crash is one abort
+    // away. Attaching a no-op-ish listener is the same pattern ws's own
+    // docs and the y-websocket reference server use; ws attaches its own
+    // handlers once handleUpgrade() succeeds, and this one stays harmless
+    // alongside them.
+    socket.on('error', (err) => {
+      console.error('WebSocket upgrade socket error:', err);
+    });
+    const match = req.url.match(/^\/ws\/files\/(\d+)$/);
+    if (!match) {
+      socket.destroy();
+      return;
+    }
+    const authenticated = await authenticateUpgrade(req);
+    if (!authenticated) {
+      // .end() (not .destroy()) so the client's HTTP parser gets a chance
+      // to read the full response line before the socket closes — an
+      // abrupt .destroy() right after .write() can surface to the client
+      // as a connection reset instead of a clean 401.
+      socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      return;
+    }
+    const fileId = parseInt(match[1], 10);
+    if (!filesRepo.getById(fileId)) {
+      // Same rationale as the 401 branch above: .end() lets the client's
+      // HTTP parser read the full response line before the socket closes.
+      // Without this check, docManager.acquire(fileId) below would throw
+      // synchronously inside loadInitialContent (reading .content_yjs off
+      // an undefined file row), which escapes as an unhandled rejection
+      // from this async upgrade handler and crashes the whole process.
+      socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      handleSyncConnection(ws, fileId, syncDocManager);
+    });
+  });
+  return wss;
+}
+
+module.exports = app;
+module.exports.attachWebSocketServer = attachWebSocketServer;
+
 if (process.env.NODE_ENV === 'production') {
   if (!config.authPasswordHash) {
     console.warn(
@@ -322,9 +401,8 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 if (require.main === module) {
-  app.listen(config.port, () => {
+  const httpServer = app.listen(config.port, () => {
     console.log(`Vellum server running on http://localhost:${config.port}`);
   });
+  app.attachWebSocketServer(httpServer);
 }
-
-module.exports = app;

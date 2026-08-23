@@ -65,7 +65,17 @@ If you want it reachable elsewhere, you have a few options:
 
 - **LAN/all interfaces:** change the port mapping in `docker-compose.yml` from `"127.0.0.1:${PORT:-3001}:3001"` to `"${PORT:-3001}:3001"` and re-run `docker compose up -d`. This exposes the app, with no built-in TLS or additional auth beyond the single `AUTH_PASSWORD`, on every network interface on the host.
 - **Tailscale:** run Tailscale on the host itself and reach the container via the host's Tailscale IP and the localhost-bound port — no compose changes needed.
-- **Reverse proxy:** put nginx, Caddy, or similar in front, forwarding to `127.0.0.1:3001`, and let the proxy handle TLS/auth/access control.
+- **Reverse proxy:** put nginx, Caddy, or similar in front, forwarding to `127.0.0.1:3001`, and let the proxy handle TLS/auth/access control. **If you use nginx**, note that the writing view's real-time collaborative editing depends on a WebSocket connection (`/ws/files/:fileId`), and nginx does not forward WebSocket upgrade requests by default — without the headers below, real-time sync will silently fail to connect while the rest of the app works normally. Add this to your `location` block:
+  ```nginx
+  location / {
+      proxy_pass http://127.0.0.1:3001;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+  }
+  ```
+  Caddy forwards WebSocket upgrades automatically and needs no special configuration for this.
 
 ## Changing the password / a note on AUTH_PASSWORD
 
@@ -98,3 +108,5 @@ docker compose up -d --build
 The named volume is untouched by a rebuild, so your data and secrets persist across upgrades.
 
 Schema changes apply automatically and incrementally when the container starts — existing projects, files, provider credentials, and settings are never wiped.
+
+The image build now includes a client-asset build step (bundling the collaborative editor's dependencies) — `docker compose up -d --build` handles this automatically, same as before.

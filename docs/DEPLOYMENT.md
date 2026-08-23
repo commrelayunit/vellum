@@ -68,7 +68,7 @@ chown -R vellum:vellum /opt/vellum /var/lib/vellum
 ```bash
 su - vellum -s /bin/bash -c "git clone <your-repo-url> /opt/vellum"
 cd /opt/vellum
-su - vellum -s /bin/bash -c "cd /opt/vellum && npm ci --omit=dev"
+su - vellum -s /bin/bash -c "cd /opt/vellum && npm ci && npm run build:client && npm prune --omit=dev"
 ```
 
 ## 6. Configure
@@ -153,7 +153,7 @@ echo "0 3 * * * vellum DB_PATH=/var/lib/vellum/data/vellum.db BACKUP_DIR=/var/ba
 ## 11. Upgrading
 
 ```bash
-su - vellum -s /bin/bash -c "cd /opt/vellum && git pull && npm ci --omit=dev"
+su - vellum -s /bin/bash -c "cd /opt/vellum && git pull && npm ci && npm run build:client && npm prune --omit=dev"
 systemctl restart vellum
 ```
 

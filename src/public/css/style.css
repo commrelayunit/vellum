@@ -212,20 +212,6 @@ body {
   }
 }
 
-/* Weak background tint on the line a collaborator's cursor is on: a
-   translucent color wash painted over that line, same technique as a
-   text-selection highlight. pointer-events:none so it never blocks typing
-   or clicking into the textarea underneath. */
-.cursor-line-tint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 21px;
-  pointer-events: none;
-  background-color: color-mix(in srgb, var(--presence-you) 14%, transparent);
-}
-
 .editor-actions .btn {
   padding: 0.25rem;
   display: flex;
@@ -254,17 +240,27 @@ body {
 
 .editor-textarea {
   flex: 1;
-  border: none;
+  display: flex;
+  overflow: hidden;
   padding: 0;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  resize: none;
   background: none;
   color: var(--ink);
-  line-height: 1.5;
   margin: 0;
   width: 100%;
   box-sizing: border-box;
+}
+
+.editor-textarea .cm-editor {
+  flex: 1;
+  min-width: 0;
+}
+
+.cm-ySelectionInfo {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 0;
+  opacity: 0.9;
 }
 
 /* Preview content styling */

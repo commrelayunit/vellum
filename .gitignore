@@ -29,3 +29,6 @@ temp/
 
 # Git worktrees
 .worktrees/
+
+# Build artifacts
+src/public/js/editor-bundle.js
