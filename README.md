@@ -2,21 +2,11 @@
 
 Vellum is a private, self-hostable writing workspace for humans and agents.
 
-The goal is a simple shared writing surface: project files, live Markdown editing, file- and selection-scoped chat, visible agent presence, proposed edits, and git-like history without the noise of a general productivity dashboard.
-
-## Product Direction
-
-- document-first interface
-- quiet paper/ink visual language
-- live collaborator presence without theatrical typing
-- range-aware agent review and rewrite actions
-- named checkpoints, diffs, and restore
-- Markdown first; later export/sync paths for repositories and document systems
-
 ## Docs
 
-- [Product spec](docs/SPEC.md)
-- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
+- [Current implementation status and remaining work](TODOS.md)
+- [Docker deployment](docs/DOCKER.md)
+- [Proxmox LXC deployment](docs/DEPLOYMENT.md)
 
 ## Connecting agents
 
@@ -47,27 +37,6 @@ Hermes, OpenClaw, and other agent providers should use the same documented
 OpenAI-compatible contract, with provider-specific bridges kept small and
 reviewable. Please open an issue or pull request for a new provider, a safer
 editing flow, or an improvement to the integration documentation.
-- [Current implementation status](TODOS.md)
-
-## Brand
-
-Initial brand assets live in `assets/brand/`.
-
-- `vellum-mark.svg` / `vellum-mark.png`: folded sheet + cursor mark
-- `vellum-lockup.svg` / `vellum-lockup.png`: lowercase italic serif wordmark
-
-The primary mark should stay free of notification dots, badges, mascot marks, or AI-gradient decoration. Agent presence belongs in the product interface state.
-
-## MVP - Simplified Interface (M1)
-
-This implementation includes:
-- Project/file CRUD
-- Markdown editor with minimal UI
-- Save/load from database
-- Preview toggle
-- Download file
-- Collapsible chat panel
-- Monospace font styling
 
 ## Development Setup
 
@@ -133,21 +102,6 @@ Docker and the Proxmox LXC install script accept a plaintext `AUTH_PASSWORD` ins
 | **Docker** | `docker compose up -d --build` with a throwaway `AUTH_PASSWORD` in `.env` or your shell. `SESSION_SECRET`/`ENCRYPTION_KEY` auto-generate — no manual secret handling. Binds to `127.0.0.1` only by default, so it's not reachable from anywhere else on your network. | Same command, but treat `AUTH_PASSWORD` as a real credential (see the `.env` `$`-escaping warning in [docs/DOCKER.md](docs/DOCKER.md)), back up the named volume regularly — it holds both the database and the generated secrets, so a database-only backup can't recover it (see [docs/DOCKER.md § Backups](docs/DOCKER.md#backups)) — and deliberately open it up if you need it reachable beyond localhost rather than relying on the default (see [docs/DOCKER.md § Exposing beyond localhost](docs/DOCKER.md#exposing-beyond-localhost)). |
 | **Proxmox LXC** | `deploy/install-lxc.sh` — one command, sensible fixed defaults (VMID, storage pool, network bridge — all overridable via env vars, see the script's header). Good for trying Vellum out or a low-stakes personal instance. It still generates real secrets and gates login; it just skips customizing those defaults and doesn't set up the backup cron job for you. | Follow the full manual walkthrough in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) instead of the script — same end state, but you choose VMID/storage/network settings deliberately, verify each step as you go, and the walkthrough carries you through the Tailscale login and backup cron setup explicitly rather than leaving them as post-install reminders. |
 
-## Architecture
-
-- Express.js backend with EJS templating, server-rendered views, and a mostly vanilla JS frontend — the real-time collaborative editor's client code is the one exception, bundled via `esbuild` (`npm run build:client`)
-- SQLite database for persistence (via `better-sqlite3`), with session-based single-password auth gating every route
-- Schema managed by a numbered migrations runner (`src/db/migrations/`) that applies pending migrations incrementally on every startup — see [Updating](#updating)
-- Markdown editor with live preview, save/load, and `.md` export
-- A user profile (display name and avatar), editable from the Settings page, used to identify you in the writing view
-- AI provider settings: store and manage encrypted API keys for any OpenAI-compatible backend (agents, cloud subscriptions, self-hosted models). Each provider can be toggled active-in-workspace to appear as a presence avatar in the writing view and to be selectable in the chat panel.
-- Writing view shows real presence — your profile and any active-in-workspace providers as avatars, plus live highlighting of the line your cursor is on (tracks logical lines; very long wrapped lines may highlight imprecisely) — alongside a collapsible chat panel that sends real streamed completions from your selected active provider (a dropdown when more than one is active) and persists each file's conversation history. Each chat request makes an outbound network call to that third-party provider and includes the full current file content as context — worth knowing given this README's self-hosted/Tailscale-only privacy framing elsewhere.
-- Real-time collaborative editing: the writing view uses a CodeMirror-based editor synced live over WebSocket (Yjs CRDT), so multiple writers can edit the same file at once with automatic, conflict-free merging and visible live cursors. Each writer's cursor color is customizable from Settings; the same picker sets a color per AI provider.
-- Selection-in-chat: select text in the editor to attach it as a quoted reference to your next chat message (multiple at once, VS Code-style); click a reference later to jump the editor back to it, correctly, even if the document has changed since.
-- Agent document editing: the AI providers configured in Settings can edit the document directly during a chat conversation, not just reply with text — the model calls a tool to make the change, which streams into the document character-by-character with a live cursor in the provider's color, the same way a human collaborator's edit would appear. Requires the provider to actually forward tool-calling through to the model — see [Agent Editing: Provider Compatibility](#agent-editing-provider-compatibility) if a provider replies as though it edited the file but the document never changes.
-- Optional line numbers (off by default, toggle in Settings), and a loading indicator on every async action in the UI.
-- Ships as a single Docker container or a one-command Proxmox LXC install, in addition to running directly with `npm start`
-
 ## Agent Editing: Provider Compatibility
 
 Agent document editing (above) works by sending a standard OpenAI-style `tools` array (one function, `edit_document`) with every chat request, and expecting the model's streamed reply to include a matching `tool_calls` entry in OpenAI's usual incremental format. Vellum sends this unconditionally to every active provider — it has no way to know in advance whether a given backend actually honors it.
@@ -176,16 +130,6 @@ Every deployment path is safe to update in place — schema changes apply automa
 - **Native**: `npm run update` (`git pull && npm ci && npm run build:client && npm prune --omit=dev && npm run migrate`), then restart the server.
 - **Docker**: `git pull && docker compose up -d --build` — migrations run automatically when the container starts. See [docs/DOCKER.md](docs/DOCKER.md).
 - **Proxmox LXC**: see [docs/DEPLOYMENT.md § Upgrading](docs/DEPLOYMENT.md#11-upgrading).
-
-## Status
-
-Local Private Workspace (M1) is complete and hardened beyond its original scope: real SQLite persistence via a numbered migrations runner (not in-memory, not a hand-run static schema), session-based password authentication, a user profile, and encrypted AI provider credential storage — with providers individually toggleable as active-in-workspace — all deployable as a single Docker container or Proxmox LXC. See [TODOS.md](TODOS.md) for the full milestone-by-milestone breakdown.
-
-Chat bound to a project/file (M2) is real: the chat panel streams completions from your selected active provider and persists conversation history per file, with editor-selection references attachable to any message. Real multi-user live collaboration (M6) is real: the writing view's editor is synced live over a session-gated WebSocket via a Yjs CRDT, so multiple writers can have the same file open at once, edit concurrently with automatic conflict-free merging, and see each other's live, color-customizable cursors.
-
-Agent-proposed edits (M3) shipped in a different shape than originally speced: rather than a propose → diff-card → apply/reject workflow, a configured AI provider edits the document directly during a chat conversation via a model-callable tool, with the change streaming into the live document character-by-character and a visible cursor in the provider's color — closer in spirit to M6's live collaboration than to a review queue. This was a deliberate design change made this session; there is no diff/apply/reject UI and no "proposed but not yet applied" state.
-
-Not yet built: distinct agent presence states beyond "editing" such as reading/reviewing (M3.5), history/named versions with restore (M4), git materialization (M5), a browser-control escape hatch (M7), renaming files (blocked on a file-switcher UI that doesn't exist yet — project renaming is done), Overleaf-style margin comments, and a write API for agents *outside* this app (e.g. a self-hosted agent on your own network) — today's agent editing is scoped to the AI providers already configured in Settings, not third-party agents integrating from outside.
 
 ## License
 
