@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createChatCompletionService } = require('./chat-completion');
+const { createChatCompletionService, EDIT_DOCUMENT_TOOL } = require('./chat-completion');
 
 function fakeClient(chunks) {
   return {
@@ -80,6 +80,21 @@ test('complete() tells the model in the system message that it can call edit_doc
     filePath: 'notes.md', fileContent: '# My Notes', history: [], userMessage: 'hi', onDelta: () => {}
   });
   assert.match(capture.request.messages[0].content, /edit_document/);
+});
+
+test('complete() tells the model in the system message to prefer small, targeted edits over rewriting the whole document', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  await service.complete({
+    apiKey: 'key', baseUrl: 'http://x', model: 'gpt-5',
+    filePath: 'notes.md', fileContent: '# My Notes', history: [], userMessage: 'hi', onDelta: () => {}
+  });
+  assert.match(capture.request.messages[0].content, /minimal|small|targeted/i);
+  assert.match(capture.request.messages[0].content, /not the whole document/i);
+});
+
+test('the edit_document tool schema itself asks for the smallest unique snippet, not the whole document', () => {
+  assert.match(EDIT_DOCUMENT_TOOL.function.parameters.properties.old_string.description, /smallest|minimal/i);
 });
 
 test('complete() includes reasoning_effort only when provided', async () => {

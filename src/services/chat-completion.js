@@ -10,7 +10,7 @@ const EDIT_DOCUMENT_TOOL = {
       properties: {
         old_string: {
           type: 'string',
-          description: 'The exact text to replace. Must match the current document content exactly and appear only once.'
+          description: 'The exact text to replace. Must match the current document content exactly and appear only once. Quote the smallest unique snippet that identifies the edit point - never the whole document or a large surrounding block.'
         },
         new_string: {
           type: 'string',
@@ -25,7 +25,7 @@ const EDIT_DOCUMENT_TOOL = {
 const MAX_TOOL_ROUNDS = 6;
 
 function buildSystemPrompt(filePath, fileContent) {
-  return `You are an AI assistant helping edit a document called ${filePath}. You can edit this document directly using the edit_document tool - use it when the user asks you to change something, rather than only describing the change in your reply. Current document content:\n\n${fileContent}`;
+  return `You are an AI assistant helping edit a document called ${filePath}. You can edit this document directly using the edit_document tool - use it when the user asks you to change something, rather than only describing the change in your reply. Make edits small and targeted: old_string should be the minimal exact snippet that needs to change, not the whole document or a large surrounding block. If you're adding new content, quote a short anchor of existing text next to where it belongs and insert there, rather than rewriting everything around it. Prefer several small edit_document calls over one large rewrite. Current document content:\n\n${fileContent}`;
 }
 
 function formatContentWithSelections(content, selections) {
@@ -167,4 +167,4 @@ function createChatCompletionService({ createClient } = {}) {
   };
 }
 
-module.exports = { createChatCompletionService };
+module.exports = { createChatCompletionService, EDIT_DOCUMENT_TOOL };
