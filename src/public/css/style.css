@@ -205,12 +205,35 @@ body {
   min-width: 0;
 }
 
-#file-select {
-  background: none;
-  border: none;
-  font-family: inherit;
-  font-size: 12px;
+/* Shared base for both <select> elements in the app (#file-select,
+   #chat-provider-select) - rounded, padded, and paper/ink-themed instead of
+   the browser default, including the open dropdown list's own option rows,
+   which otherwise highlight in the browser's default blue regardless of
+   the rest of the page's theme (Chromium respects background-color/color
+   on <option> for this; support varies elsewhere). */
+select {
+  background-color: var(--paper);
   color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-radius: 3px;
+  padding: 0.2rem 0.4rem;
+  font-family: inherit;
+  accent-color: var(--ink);
+}
+
+select option {
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+select option:checked,
+select option:hover {
+  background-color: var(--ink);
+  color: var(--paper);
+}
+
+#file-select {
+  font-size: 12px;
   max-width: 16rem;
   min-width: 0;
 }
@@ -367,27 +390,41 @@ body {
   min-width: 0;
 }
 
-/* y-codemirror.next's own base theme hides this until you hover the exact
-   cursor pixel, and floats it above the text line. Scoped under
-   .editor-textarea (rather than the bare .cm-ySelectionInfo the base theme
-   uses) so this reliably outranks it on specificity regardless of whether
-   the page stylesheet or CodeMirror's own injected theme loads last -
-   always visible, positioned right after the cursor instead of floating
-   above it. Applies identically to remote peers' cursors (rendered by
-   yCollab) and the local user's own (rendered by LocalCursorLabelWidget in
-   editor-sync.js), since both reuse this exact class name. */
+/* The name tag glued to the cursor's exact position (y-codemirror.next's
+   own remote widget) turned out to be the wrong shape for this: too easy
+   to miss while just watching someone type, and pinning a visible label to
+   a position that moves character-by-character during a streamed agent
+   edit was distracting. Explicitly hidden (rather than left at the base
+   theme's own hover-only default) so this doesn't depend on stylesheet
+   load order - editor-sync.js's remoteActiveLinePlugin/
+   localCursorLabelPlugin render the real name tag now, anchored to the end
+   of the line instead. Scoped under .editor-textarea for the specificity
+   to reliably win regardless of load order. */
 .editor-textarea .cm-ySelectionInfo {
+  display: none;
+}
+
+/* The end-of-line name tag both remoteActiveLinePlugin and
+   localCursorLabelPlugin render (editor-sync.js). Colored text with no
+   background box - a solid saturated background read as too loud/
+   prominent against the already-tinted active line. */
+/* Pinned to the editor's own right edge (not trailing the line's own text,
+   which put it at a different horizontal spot for every line depending on
+   length) - .cm-scroller is @codemirror/view's own nearest position:relative
+   ancestor of anything inside .cm-content, and (with line wrapping always
+   on - see EditorView.lineWrapping in editor-sync.js) it never grows wider
+   than the visible viewport, so `right` here really is the visible right
+   edge. Leaving `top` unset keeps the label at its own line's natural
+   vertical position (the CSS "static position" default for an
+   absolutely-positioned inline element with no top/bottom set). */
+.cm-lineNameLabel {
   font-family: 'Courier New', monospace;
   font-size: 10px;
   text-transform: lowercase;
-  padding: 1px 4px;
-  border-radius: 0;
+  opacity: 0.8;
+  user-select: none;
   position: absolute;
-  left: 100%;
-  top: 0;
-  margin-left: 2px;
-  opacity: 0.9;
-  transition: none;
+  right: 8px;
 }
 
 /* Preview content styling */
@@ -519,11 +556,7 @@ body {
 }
 
 #chat-provider-select {
-  background: none;
-  border: none;
-  font-family: inherit;
   font-size: 11px;
-  color: var(--ink);
   margin-right: 0.5rem;
 }
 
@@ -689,12 +722,13 @@ body {
 }
 
 .new-project-form input {
-  background: none;
-  border: none;
+  background-color: var(--paper);
+  border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-radius: 3px;
   font-family: inherit;
   font-size: 12px;
   color: var(--ink);
-  padding: 0.25rem;
+  padding: 0.3rem 0.5rem;
   min-width: 160px;
 }
 
@@ -763,7 +797,14 @@ body {
   justify-content: center;
 }
 
-.login-title .caret {
+.app-title .caret {
+  /* A bare <span> is display:inline by default, which ignores width/height
+     entirely - this only ever rendered on the login page by accident,
+     because .login-title's display:flex blockifies its flex-item children
+     (a real CSS Flexbox rule, not a coincidence, but not something the
+     regular header ever had). Explicit inline-block makes it size
+     correctly regardless of the parent's layout mode. */
+  display: inline-block;
   width: 2px;
   height: 14px;
   margin-left: 2px;
@@ -840,21 +881,24 @@ body {
 
 .provider-form input,
 .provider-form select {
-  background: none;
-  border: none;
+  background-color: var(--paper);
+  border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-radius: 3px;
   font-family: inherit;
   font-size: 12px;
   color: var(--ink);
-  padding: 0.25rem;
+  padding: 0.3rem 0.5rem;
 }
 
-/* Overrides the borderless/backgroundless rule above - a native color swatch
-   needs its own compact, bordered box rather than blending into the form. */
+/* Overrides the rule above - a native color swatch needs its own compact
+   box (no padding, full-strength border) rather than the regular text
+   input's roomier padding and lighter border. */
 .provider-form input.color-swatch-input {
   width: 28px;
   height: 20px;
   padding: 0;
   border: 1px solid var(--ink);
+  border-radius: 3px;
   cursor: pointer;
   align-self: flex-start;
 }
@@ -869,6 +913,7 @@ body {
 .checkbox-field input[type="checkbox"] {
   width: auto;
   cursor: pointer;
+  accent-color: var(--ink);
 }
 
 .selection-reference-btn {

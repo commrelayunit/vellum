@@ -324,19 +324,26 @@ test('window.__vellumJumpToReference is exposed alongside window.__vellumEditorV
 
 function loadBuildRemoteActiveLineDecorations() {
   const Y = require('yjs');
-  const { Decoration } = require('@codemirror/view');
+  const { Decoration, WidgetType } = require('@codemirror/view');
   const source = loadSource();
+  const widgetClassSource = extractClassSource(source, 'LineNameLabelWidget');
   // buildDecorations is a nested function inside remoteActiveLinePlugin, but
   // extractFunctionSource does a plain text search - it finds this inner
   // function's own brace-matched body regardless of nesting. ytext/ydoc/
   // awareness are free variables inside it (closed over the real outer
   // function's parameters in the actual module); injecting them as
   // new Function() parameters reproduces that scoping for the test.
+  // LineNameLabelWidget is likewise a free variable, from the module's top
+  // level - sharing one scope with the class source (as
+  // loadBuildLocalCursorLabelDecorations does below) resolves it the same
+  // way the real file does.
   const fnSource = extractFunctionSource(source, 'buildDecorations');
   // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source function
-  const makeBuildDecorations = new Function('Y', 'Decoration', 'ytext', 'ydoc', 'awareness',
-    `return (${fnSource});`);
-  return (ytext, ydoc, awareness, view) => makeBuildDecorations(Y, Decoration, ytext, ydoc, awareness)(view);
+  const makeBuildDecorations = new Function('Y', 'Decoration', 'WidgetType', 'ytext', 'ydoc', 'awareness', `
+    ${widgetClassSource}
+    return (${fnSource});
+  `);
+  return (ytext, ydoc, awareness, view) => makeBuildDecorations(Y, Decoration, WidgetType, ytext, ydoc, awareness)(view);
 }
 
 function fakeAwareness(localClientId, remoteStates) {
@@ -367,9 +374,36 @@ test('remote active-line decorations highlight the line under a remote peer\'s b
   const found = [];
   decorations.between(0, ytext.length, (from, to, value) => { found.push({ from, to, value }); });
 
-  assert.equal(found.length, 1);
-  assert.equal(found[0].from, 9, 'decoration should start at the beginning of "line two"');
-  assert.match(found[0].value.spec.attributes.style, /#c96f48 20%/);
+  assert.equal(found.length, 2, 'expected both the line background and the end-of-line name tag');
+  const lineDecoration = found.find((f) => f.value.spec.attributes);
+  const nameDecoration = found.find((f) => f.value.spec.widget);
+  assert.equal(lineDecoration.from, 9, 'the line background should start at the beginning of "line two"');
+  assert.match(lineDecoration.value.spec.attributes.style, /#c96f48 20%/);
+  assert.equal(nameDecoration.from, 17, 'the name tag should land at the end of "line two" (offset 17), not the cursor');
+  assert.equal(nameDecoration.value.spec.widget.name, 'Anonymous', 'no user.name was supplied, so it should fall back rather than throw');
+  assert.equal(nameDecoration.value.spec.widget.color, '#c96f48');
+});
+
+test('remote active-line decorations use the peer\'s real name when one is set', () => {
+  const Y = require('yjs');
+  const { EditorState } = require('@codemirror/state');
+  const build = loadBuildRemoteActiveLineDecorations();
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  ytext.insert(0, 'only line');
+  const view = { state: EditorState.create({ doc: ytext.toString() }) };
+
+  const cursorPos = Y.createRelativePositionFromTypeIndex(ytext, 2);
+  const awareness = fakeAwareness(1, [
+    [2, { user: { name: 'Grace Hopper', color: '#c96f48' }, cursor: { anchor: cursorPos, head: cursorPos } }]
+  ]);
+
+  const decorations = build(ytext, ydoc, awareness, view);
+  const found = [];
+  decorations.between(0, ytext.length, (from, to, value) => { found.push(value); });
+  const nameDecoration = found.find((v) => v.spec.widget);
+  assert.equal(nameDecoration.spec.widget.name, 'Grace Hopper');
 });
 
 test('remote active-line decorations skip the local client\'s own awareness entry', () => {
@@ -416,58 +450,82 @@ test('remote active-line decorations skip a peer with no cursor set', () => {
 function loadBuildLocalCursorLabelDecorations() {
   const { Decoration, WidgetType } = require('@codemirror/view');
   const source = loadSource();
-  const widgetClassSource = extractClassSource(source, 'LocalCursorLabelWidget');
+  const nameWidgetClassSource = extractClassSource(source, 'LineNameLabelWidget');
+  const caretWidgetClassSource = extractClassSource(source, 'LocalCaretWidget');
   const fnSource = extractFunctionSource(source, 'buildLocalCursorLabelDecorations');
-  // Both share one scope so buildLocalCursorLabelDecorations' reference to
-  // LocalCursorLabelWidget (a free variable from the module's top level)
-  // resolves correctly, matching how it's actually wired in the real file.
+  // All three share one scope so buildLocalCursorLabelDecorations' references
+  // to LineNameLabelWidget/LocalCaretWidget (free variables from the
+  // module's top level) resolve correctly, matching how it's actually wired
+  // in the real file.
   // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source
   const factory = new Function('Decoration', 'WidgetType', `
-    ${widgetClassSource}
+    ${nameWidgetClassSource}
+    ${caretWidgetClassSource}
     return (${fnSource});
   `);
   return factory(Decoration, WidgetType);
 }
 
-test('buildLocalCursorLabelDecorations places a widget at the current selection head', () => {
+test('buildLocalCursorLabelDecorations places the caret at the cursor and the name at the end of its line', () => {
   const { EditorState } = require('@codemirror/state');
   const build = loadBuildLocalCursorLabelDecorations();
 
-  const view = { state: EditorState.create({ doc: 'Hello world', selection: { anchor: 5 } }) };
+  const view = { state: EditorState.create({ doc: 'first line\nsecond line\nthird line', selection: { anchor: 15 } }) };
   const decorations = build(view, 'Ada', '#5b6eae');
 
   const found = [];
   decorations.between(0, view.state.doc.length, (from, to, value) => { found.push({ from, to, value }); });
-  assert.equal(found.length, 1);
-  assert.equal(found[0].from, 5);
-  assert.equal(found[0].value.spec.widget.name, 'Ada');
-  assert.equal(found[0].value.spec.widget.color, '#5b6eae');
+  assert.equal(found.length, 2);
+
+  // Cursor at 15 lands inside "second line" (offsets 11-22).
+  const caretDecoration = found.find((f) => 'color' in f.value.spec.widget && !('name' in f.value.spec.widget));
+  const nameDecoration = found.find((f) => 'name' in f.value.spec.widget);
+  assert.equal(caretDecoration.from, 15, 'the caret must stay at the actual cursor position');
+  assert.equal(caretDecoration.value.spec.widget.color, '#5b6eae');
+  assert.equal(nameDecoration.from, 22, 'the name label must land at the end of the line (22), not the cursor itself');
+  assert.equal(nameDecoration.value.spec.widget.name, 'Ada');
+  assert.equal(nameDecoration.value.spec.widget.color, '#5b6eae');
 });
 
 test('buildLocalCursorLabelDecorations tracks the head, not the anchor, of a non-empty selection', () => {
   const { EditorState } = require('@codemirror/state');
   const build = loadBuildLocalCursorLabelDecorations();
 
-  // A selection dragged backwards - anchor at 8, head at 2 - should place
-  // the label at the head (2), matching where the caret actually is.
-  const view = { state: EditorState.create({ doc: 'Hello world', selection: { anchor: 8, head: 2 } }) };
+  // A selection dragged backwards - anchor at 20 (line 2), head at 2
+  // (line 1) - both the caret and the name label should track the head
+  // (line 1), not the line the drag started on.
+  const view = { state: EditorState.create({ doc: 'first line\nsecond line', selection: { anchor: 20, head: 2 } }) };
   const decorations = build(view, 'Ada', '#5b6eae');
 
   const found = [];
   decorations.between(0, view.state.doc.length, (from) => { found.push(from); });
-  assert.deepEqual(found, [2]);
+  assert.deepEqual(found.sort((a, b) => a - b), [2, 10]);
 });
 
-test('LocalCursorLabelWidget considers two widgets with the same name/color equal, different otherwise', () => {
+test('LineNameLabelWidget considers two widgets with the same name/color equal, different otherwise', () => {
   const source = loadSource();
-  const widgetClassSource = extractClassSource(source, 'LocalCursorLabelWidget');
+  const widgetClassSource = extractClassSource(source, 'LineNameLabelWidget');
   const { WidgetType } = require('@codemirror/view');
   // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source
-  const LocalCursorLabelWidget = new Function('WidgetType', `${widgetClassSource}\nreturn LocalCursorLabelWidget;`)(WidgetType);
+  const LineNameLabelWidget = new Function('WidgetType', `${widgetClassSource}\nreturn LineNameLabelWidget;`)(WidgetType);
 
-  const a = new LocalCursorLabelWidget('Ada', '#5b6eae');
-  const b = new LocalCursorLabelWidget('Ada', '#5b6eae');
-  const c = new LocalCursorLabelWidget('Grace', '#5b6eae');
+  const a = new LineNameLabelWidget('Ada', '#5b6eae');
+  const b = new LineNameLabelWidget('Ada', '#5b6eae');
+  const c = new LineNameLabelWidget('Grace', '#5b6eae');
+  assert.equal(a.eq(b), true);
+  assert.equal(a.eq(c), false);
+});
+
+test('LocalCaretWidget considers two widgets with the same color equal, different otherwise', () => {
+  const source = loadSource();
+  const widgetClassSource = extractClassSource(source, 'LocalCaretWidget');
+  const { WidgetType } = require('@codemirror/view');
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source
+  const LocalCaretWidget = new Function('WidgetType', `${widgetClassSource}\nreturn LocalCaretWidget;`)(WidgetType);
+
+  const a = new LocalCaretWidget('#5b6eae');
+  const b = new LocalCaretWidget('#5b6eae');
+  const c = new LocalCaretWidget('#c96f48');
   assert.equal(a.eq(b), true);
   assert.equal(a.eq(c), false);
 });

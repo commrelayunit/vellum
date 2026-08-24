@@ -161,6 +161,68 @@ function selectionReferencePlugin(ytext) {
   });
 }
 
+// A small lowercase name tag anchored to the END of a line - not glued to
+// a moving cursor position - for both remote peers and the local user.
+// Deliberately no background box (just colored text): a solid saturated
+// background read as too loud/prominent against the already-tinted active
+// line.
+class LineNameLabelWidget extends WidgetType {
+  constructor(name, color) {
+    super();
+    this.name = name;
+    this.color = color;
+  }
+
+  eq(other) {
+    return other.name === this.name && other.color === this.color;
+  }
+
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = 'cm-lineNameLabel';
+    span.style.color = this.color;
+    span.textContent = this.name;
+    return span;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+// A colored caret marker at the local user's own cursor position - the
+// same visual treatment (bar + dot) yCollab already renders for remote
+// peers, so the local cursor reads consistently with everyone else's in
+// the writing surface. Deliberately separate from LineNameLabelWidget:
+// the name tag lives at the end of the line, not glued to this.
+class LocalCaretWidget extends WidgetType {
+  constructor(color) {
+    super();
+    this.color = color;
+  }
+
+  eq(other) {
+    return other.color === this.color;
+  }
+
+  toDOM() {
+    const wrap = document.createElement('span');
+    wrap.className = 'cm-ySelectionCaret';
+    wrap.style.backgroundColor = this.color;
+    wrap.style.borderColor = this.color;
+    wrap.appendChild(document.createTextNode('⁠'));
+    const dot = document.createElement('div');
+    dot.className = 'cm-ySelectionCaretDot';
+    wrap.appendChild(dot);
+    wrap.appendChild(document.createTextNode('⁠'));
+    return wrap;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
 // y-codemirror.next's own remote-cursor rendering (yCollab) only paints a
 // background for an actual multi-character selection - for a bare cursor
 // (anchor === head, which is all agent-editor.js's updateCursor() ever
@@ -168,7 +230,9 @@ function selectionReferencePlugin(ytext) {
 // the missing piece: an .cm-activeLine-style background under any remote
 // peer's cursor line, in that peer's own color, so a collaborator or agent
 // editing the document is exactly as visible as it is for the local user's
-// own cursor.
+// own cursor - plus a name tag at the end of that line (not glued to the
+// cursor itself, which y-codemirror.next's own widget already renders and
+// which this deliberately leaves untouched).
 function remoteActiveLinePlugin(ytext, awareness) {
   const ydoc = ytext.doc;
 
@@ -182,12 +246,18 @@ function remoteActiveLinePlugin(ytext, awareness) {
       if (!pos || pos.type !== ytext) return;
       const color = (state.user && state.user.color) || '#30bced';
       const colorLight = (state.user && state.user.colorLight) || `${color}33`;
+      const name = (state.user && state.user.name) || 'Anonymous';
       const index = Math.min(pos.index, view.state.doc.length);
       const line = view.state.doc.lineAt(index);
       decorations.push({
         from: line.from,
         to: line.from,
         value: Decoration.line({ attributes: { style: `background-color: ${colorLight}` } })
+      });
+      decorations.push({
+        from: line.to,
+        to: line.to,
+        value: Decoration.widget({ widget: new LineNameLabelWidget(name, color), side: 1 })
       });
     });
     return Decoration.set(decorations, true);
@@ -226,51 +296,17 @@ function remoteActiveLinePlugin(ytext, awareness) {
   });
 }
 
-// y-codemirror.next's remote-cursor widget (the small name tag) only ever
-// renders for OTHER peers - by design, you don't usually need to label your
-// own cursor. This adds the missing counterpart: a name tag at the local
-// user's own cursor/selection head, built from the exact same DOM shape and
-// CSS classes (cm-ySelectionCaret/cm-ySelectionCaretDot/cm-ySelectionInfo)
-// the remote widget uses, so one CSS rule styles both consistently.
-class LocalCursorLabelWidget extends WidgetType {
-  constructor(name, color) {
-    super();
-    this.name = name;
-    this.color = color;
-  }
-
-  eq(other) {
-    return other.name === this.name && other.color === this.color;
-  }
-
-  toDOM() {
-    const wrap = document.createElement('span');
-    wrap.className = 'cm-ySelectionCaret';
-    wrap.style.backgroundColor = this.color;
-    wrap.style.borderColor = this.color;
-    wrap.appendChild(document.createTextNode('⁠'));
-    const dot = document.createElement('div');
-    dot.className = 'cm-ySelectionCaretDot';
-    wrap.appendChild(dot);
-    wrap.appendChild(document.createTextNode('⁠'));
-    const info = document.createElement('div');
-    info.className = 'cm-ySelectionInfo';
-    info.textContent = this.name;
-    wrap.appendChild(info);
-    wrap.appendChild(document.createTextNode('⁠'));
-    return wrap;
-  }
-
-  ignoreEvent() {
-    return true;
-  }
-}
-
+// The local-cursor counterpart to remoteActiveLinePlugin: a colored caret
+// at the cursor position (y-codemirror.next only ever renders that for
+// remote peers, by design) plus the same end-of-line name tag remote
+// peers get, so the local cursor reads consistently with everyone else's.
 function buildLocalCursorLabelDecorations(view, profileLabel, localColor) {
   const head = view.state.selection.main.head;
+  const line = view.state.doc.lineAt(head);
   return Decoration.set([
-    Decoration.widget({ widget: new LocalCursorLabelWidget(profileLabel, localColor), side: 1 }).range(head)
-  ]);
+    Decoration.widget({ widget: new LocalCaretWidget(localColor), side: 1 }).range(head),
+    Decoration.widget({ widget: new LineNameLabelWidget(profileLabel, localColor), side: 1 }).range(line.to)
+  ], true);
 }
 
 function localCursorLabelPlugin(profileLabel, localColor) {
