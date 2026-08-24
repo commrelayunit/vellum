@@ -3,6 +3,20 @@ const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
+const SqliteSessionStore = require('better-sqlite3-session-store')(session);
+// The package's own `expired.clear` option can't actually disable the
+// periodic cleanup: its constructor computes
+// `(options.expired && options.expired.clear) || true`, so passing `false`
+// gets silently coerced right back to `true`. Worse, startInterval() throws
+// away the setInterval() handle it creates - no .unref(), and no way to
+// retrieve or clear it from outside once construction has run. Overriding
+// the prototype method before construction is the only way to actually skip
+// it. Safe to skip entirely: get() already excludes expired rows at query
+// time, so periodic deletion is disk hygiene, not correctness - and
+// necessary, since the un-unref'd interval otherwise keeps any process that
+// imports this module (including the test suite, which requires server.js
+// directly) alive indefinitely.
+SqliteSessionStore.prototype.startInterval = () => {};
 
 const { config } = require('./config');
 const { createConnection } = require('./db/connection');
@@ -41,6 +55,17 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const sessionMiddleware = session({
+  // The default MemoryStore leaks (sessions never freed) and doesn't survive
+  // a restart - express-session's own startup warning flags it as unfit for
+  // production. Backed by the same `db` connection everything else uses, so
+  // no new native dependency and sessions persist across container restarts.
+  // expired.clear is deliberately off: the store's own get() query already
+  // excludes expired rows (`WHERE ... datetime('now') < datetime(expire)`),
+  // so nothing relies on proactive deletion - and the package's periodic
+  // clear runs on a setInterval it never .unref()s, which would otherwise
+  // keep any process that imports this module (including this test suite,
+  // which requires server.js directly) alive indefinitely.
+  store: new SqliteSessionStore({ client: db, expired: { clear: false } }),
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
