@@ -46,6 +46,25 @@ test('applyEdit() inserts the replacement in the specified chunk size', async ()
   session.end();
 });
 
+test('applyEdit() populates a genuinely empty document via an empty old_string', async () => {
+  const { docManager } = setup('');
+  const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkDelayMs: 0 });
+  const result = await session.applyEdit('', '# New Document\n\nHello there.');
+  assert.equal(result.success, true);
+  assert.equal(session.getCurrentContent(), '# New Document\n\nHello there.');
+  session.end();
+});
+
+test('applyEdit() still rejects an empty old_string against a non-empty document', async () => {
+  const { docManager } = setup('Hello world');
+  const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkDelayMs: 0 });
+  const result = await session.applyEdit('', 'inserted');
+  assert.equal(result.success, false);
+  assert.match(result.message, /not found/);
+  assert.equal(session.getCurrentContent(), 'Hello world');
+  session.end();
+});
+
 test('applyEdit() fails without mutating the document when old_string is not found', async () => {
   const { docManager } = setup('Hello world');
   const session = createAgentEditSession({ docManager, fileId: 1, providerLabel: 'Agent', providerColor: '#ff0000', chunkDelayMs: 0 });

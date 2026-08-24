@@ -81,19 +81,35 @@ function createAgentEditSession({ docManager, fileId, providerLabel, providerCol
         return { success: false, message: 'old_string and new_string must both be strings', content: ytext.toString() };
       }
       const current = ytext.toString();
-      const occurrences = countOccurrences(current, oldString);
-      if (occurrences === 0) {
-        return { success: false, message: 'old_string not found in the document', content: current };
-      }
-      if (occurrences > 1) {
-        return { success: false, message: `old_string matches ${occurrences} times - quote more surrounding context to make it unique`, content: current };
+      // A genuinely empty document is the one case where an empty old_string
+      // is legitimate rather than ambiguous: there is no existing text a
+      // model could quote instead, so this is the only way to populate a
+      // brand-new file. countOccurrences() still short-circuits an empty
+      // needle to 0 for every other call (an empty old_string against
+      // non-empty content stays rejected below) - that guard exists to
+      // avoid indexOf('', i) matching at every position and looping
+      // forever, and permitting it against real content would be
+      // genuinely ambiguous (which of the infinite empty gaps between
+      // characters did the model mean?).
+      const isEmptyDocInsert = oldString === '' && current.length === 0;
+
+      if (!isEmptyDocInsert) {
+        const occurrences = countOccurrences(current, oldString);
+        if (occurrences === 0) {
+          return { success: false, message: 'old_string not found in the document', content: current };
+        }
+        if (occurrences > 1) {
+          return { success: false, message: `old_string matches ${occurrences} times - quote more surrounding context to make it unique`, content: current };
+        }
       }
 
       ensurePresence();
-      const start = current.indexOf(oldString);
-      doc.transact(() => {
-        ytext.delete(start, oldString.length);
-      });
+      const start = isEmptyDocInsert ? 0 : current.indexOf(oldString);
+      if (!isEmptyDocInsert) {
+        doc.transact(() => {
+          ytext.delete(start, oldString.length);
+        });
+      }
       updateCursor(start);
 
       // Re-resolved from a Y.RelativePosition anchor before every chunk (not
