@@ -705,7 +705,7 @@ body {
 
   .chat-panel {
     width: 100%;
-    height: 200px;
+    height: 40vh;
   }
 
   .chat-panel.collapsed {
