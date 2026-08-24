@@ -155,12 +155,12 @@ test('GET /writing renders the project\'s first file by default', async () => {
     headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({ name: 'Writing Test Project' })
   });
-  const { project } = await createRes.json();
+  const { project, file } = await createRes.json();
 
   const res = await fetch(`${base}/writing?project=${project.id}`, { headers: { Cookie: cookie } });
   assert.equal(res.status, 200);
   const body = await res.text();
-  assert.match(body, /Untitled\.md/);
+  assert.match(body, new RegExp(`<option value="${file.id}" selected>Untitled</option>`));
   server.close();
 });
 
@@ -171,6 +171,266 @@ test('GET /writing 404s for an unknown project', async () => {
   const cookie = await login(base);
   const res = await fetch(`${base}/writing?project=999999`, { headers: { Cookie: cookie } });
   assert.equal(res.status, 404);
+  server.close();
+});
+
+test('POST /api/projects/:id/files creates a new file in the project', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Multi File Project' })
+  });
+  const { project } = await createRes.json();
+
+  const res = await fetch(`${base}/api/projects/${project.id}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chapter 2' })
+  });
+  assert.equal(res.status, 201);
+  const { success, file } = await res.json();
+  assert.equal(success, true);
+  assert.equal(file.path, 'Chapter 2.md');
+  assert.equal(file.title, 'Chapter 2');
+
+  const writingRes = await fetch(`${base}/writing?project=${project.id}`, { headers: { Cookie: cookie } });
+  const body = await writingRes.text();
+  assert.match(body, /<option value="[0-9]+"[^>]*>Chapter 2<\/option>/);
+  server.close();
+});
+
+test('POST /api/projects/:id/files rejects an empty name', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Empty Name Project' })
+  });
+  const { project } = await createRes.json();
+
+  const res = await fetch(`${base}/api/projects/${project.id}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: '  ' })
+  });
+  assert.equal(res.status, 400);
+  server.close();
+});
+
+test('POST /api/projects/:id/files 404s for an unknown project', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const res = await fetch(`${base}/api/projects/999999/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'x' })
+  });
+  assert.equal(res.status, 404);
+  server.close();
+});
+
+test('POST /api/files/:id renames a file, updating both path and title', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Rename File Project' })
+  });
+  const { file } = await createRes.json();
+
+  const res = await fetch(`${base}/api/files/${file.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Renamed Notes' })
+  });
+  assert.equal(res.status, 200);
+  const { success, file: renamed } = await res.json();
+  assert.equal(success, true);
+  assert.equal(renamed.path, 'Renamed Notes.md');
+  assert.equal(renamed.title, 'Renamed Notes');
+  server.close();
+});
+
+test('POST /api/files/:id rejects a rename that collides with an existing file in the same project', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Collision Project' })
+  });
+  const { project, file: firstFile } = await createRes.json();
+
+  const secondFileRes = await fetch(`${base}/api/projects/${project.id}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Second File' })
+  });
+  const { file: secondFile } = await secondFileRes.json();
+
+  const res = await fetch(`${base}/api/files/${secondFile.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: firstFile.title })
+  });
+  assert.equal(res.status, 400);
+  const { success, message } = await res.json();
+  assert.equal(success, false);
+  assert.match(message, /already exists/);
+  server.close();
+});
+
+test('POST /api/files/:id 404s for an unknown file', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const res = await fetch(`${base}/api/files/999999`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'x' })
+  });
+  assert.equal(res.status, 404);
+  server.close();
+});
+
+test('POST /api/files/:id/delete removes a file when the project has more than one', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Delete File Project' })
+  });
+  const { project, file: firstFile } = await createRes.json();
+
+  const secondFileRes = await fetch(`${base}/api/projects/${project.id}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Second File' })
+  });
+  const { file: secondFile } = await secondFileRes.json();
+
+  const res = await fetch(`${base}/api/files/${secondFile.id}/delete`, {
+    method: 'POST',
+    headers: { Cookie: cookie }
+  });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).success, true);
+
+  const writingRes = await fetch(`${base}/writing?project=${project.id}&file=${secondFile.id}`, { headers: { Cookie: cookie } });
+  assert.equal(writingRes.status, 404);
+
+  // The remaining file must still be reachable as the project's only file.
+  const remainingRes = await fetch(`${base}/writing?project=${project.id}&file=${firstFile.id}`, { headers: { Cookie: cookie } });
+  assert.equal(remainingRes.status, 200);
+  server.close();
+});
+
+test('POST /api/files/:id/delete refuses to remove a project\'s last remaining file', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Last File Project' })
+  });
+  const { file } = await createRes.json();
+
+  const res = await fetch(`${base}/api/files/${file.id}/delete`, {
+    method: 'POST',
+    headers: { Cookie: cookie }
+  });
+  assert.equal(res.status, 400);
+  const { success, message } = await res.json();
+  assert.equal(success, false);
+  assert.match(message, /at least one file/);
+  server.close();
+});
+
+test('POST /api/files/:id/delete also deletes that file\'s chat history', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+
+  const createRes = await fetch(`${base}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Chat Cleanup Project' })
+  });
+  const { project, file: firstFile } = await createRes.json();
+
+  const secondFileRes = await fetch(`${base}/api/projects/${project.id}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ name: 'Second File' })
+  });
+  const { file: secondFile } = await secondFileRes.json();
+
+  const createProvider = await fetch(`${base}/api/providers`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Delete Cleanup Provider', baseUrl: 'http://fake', apiKey: 'key-cccc' })
+  });
+  const { provider } = await createProvider.json();
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'Delete Cleanup Provider', baseUrl: 'http://fake', apiKey: '', activeInWorkspace: true })
+  });
+  app.locals.chatCompletionService = { complete: async ({ onDelta }) => { onDelta('ok'); return 'ok'; } };
+  await fetch(`${base}/api/chat/${secondFile.id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'Hello' })
+  });
+
+  const beforeDelete = await fetch(`${base}/api/chat/${secondFile.id}/messages`, { headers: { Cookie: cookie } });
+  assert.equal((await beforeDelete.json()).messages.length, 2);
+
+  await fetch(`${base}/api/files/${secondFile.id}/delete`, { method: 'POST', headers: { Cookie: cookie } });
+
+  const afterDelete = await fetch(`${base}/api/chat/${secondFile.id}/messages`, { headers: { Cookie: cookie } });
+  assert.equal((await afterDelete.json()).messages.length, 0);
+  server.close();
+});
+
+test('unauthenticated POST /api/projects/:id/files redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/projects/1/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'x' }),
+    redirect: 'manual'
+  });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get('location'), /\/login/);
   server.close();
 });
 

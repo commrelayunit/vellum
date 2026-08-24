@@ -8,7 +8,7 @@ const { config } = require('./config');
 const { createConnection } = require('./db/connection');
 const { migrate } = require('./db/schema');
 const { createProjectsRepo } = require('./db/projects');
-const { createFilesRepo } = require('./db/files');
+const { createFilesRepo, deriveFilePath } = require('./db/files');
 const { createSecretsService } = require('./crypto/secrets');
 const { createProvidersRepo } = require('./db/providers');
 const { createUserProfileRepo } = require('./db/user-profile');
@@ -81,7 +81,7 @@ app.get('/projects', requireAuth, (req, res) => {
       // marker (e.g. "2026-08-18 06:26:40"); without converting to real
       // ISO-8601 UTC, the client would parse it as local time.
       updatedAt: `${latestUpdate.replace(' ', 'T')}Z`,
-      recentFiles: files.slice(0, 3).map((f) => f.path)
+      recentFiles: files.slice(0, 3).map((f) => ({ id: f.id, path: f.path }))
     };
   });
   res.render('projects', { projects });
@@ -123,6 +123,51 @@ app.post('/api/projects/:id', requireAuth, (req, res) => {
   res.json({ success: true, project });
 });
 
+app.post('/api/projects/:id/files', requireAuth, (req, res) => {
+  const projectId = parseInt(req.params.id, 10);
+  const project = projectsRepo.getById(projectId);
+  if (!project) {
+    return res.status(404).json({ success: false, message: 'Project not found' });
+  }
+  if (typeof req.body.name !== 'string' || !req.body.name.trim()) {
+    return res.status(400).json({ success: false, message: 'File name is required' });
+  }
+  const file = filesRepo.createNamed({ projectId, name: req.body.name.trim() });
+  res.status(201).json({ success: true, file });
+});
+
+app.post('/api/files/:id', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const existing = filesRepo.getById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'File not found' });
+  }
+  if (typeof req.body.name !== 'string' || !req.body.name.trim()) {
+    return res.status(400).json({ success: false, message: 'File name is required' });
+  }
+  const trimmedName = req.body.name.trim();
+  const path = deriveFilePath(trimmedName);
+  if (filesRepo.pathExistsInProject(existing.project_id, path, id)) {
+    return res.status(400).json({ success: false, message: `A file named "${path}" already exists in this project` });
+  }
+  const file = filesRepo.rename(id, { path, title: trimmedName });
+  res.json({ success: true, file });
+});
+
+app.post('/api/files/:id/delete', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const existing = filesRepo.getById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'File not found' });
+  }
+  if (filesRepo.listByProjectId(existing.project_id).length <= 1) {
+    return res.status(400).json({ success: false, message: 'A project must have at least one file' });
+  }
+  chatMessagesRepo.deleteForFile(id);
+  filesRepo.delete(id);
+  res.json({ success: true });
+});
+
 app.get('/writing', requireAuth, (req, res) => {
   const projectId = parseInt(req.query.project, 10);
   const project = projectsRepo.getById(projectId);
@@ -135,9 +180,10 @@ app.get('/writing', requireAuth, (req, res) => {
   if (!file || file.project_id !== project.id) {
     return res.status(404).send('No file to open for this project');
   }
+  const files = filesRepo.listByProjectId(project.id);
   const profile = userProfileRepo.get();
   const activeProviders = providersRepo.list().filter((p) => p.activeInWorkspace);
-  res.render('writing', { project, file, profile, activeProviders });
+  res.render('writing', { project, file, files, profile, activeProviders });
 });
 
 app.post('/api/save-file/:fileId', requireAuth, (req, res) => {

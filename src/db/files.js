@@ -1,4 +1,8 @@
 // src/db/files.js
+function deriveFilePath(name) {
+  return /\.[a-z0-9]+$/i.test(name) ? name : `${name}.md`;
+}
+
 function createFilesRepo(db) {
   return {
     listByProjectId(projectId) {
@@ -27,8 +31,36 @@ function createFilesRepo(db) {
         .prepare("UPDATE files SET content = ?, content_yjs = ?, updated_at = datetime('now') WHERE id = ?")
         .run(content, contentYjs, id);
       return info.changes > 0;
+    },
+    createNamed({ projectId, name, content }) {
+      const trimmedName = name.trim();
+      const basePath = deriveFilePath(trimmedName);
+      const dot = basePath.lastIndexOf('.');
+      let path = basePath;
+      let title = trimmedName;
+      let n = 2;
+      while (db.prepare('SELECT 1 FROM files WHERE project_id = ? AND path = ?').get(projectId, path)) {
+        path = dot > -1 ? `${basePath.slice(0, dot)} ${n}${basePath.slice(dot)}` : `${basePath} ${n}`;
+        title = `${trimmedName} ${n}`;
+        n += 1;
+      }
+      return this.create({ projectId, path, title, content });
+    },
+    pathExistsInProject(projectId, path, excludeId) {
+      const row = excludeId
+        ? db.prepare('SELECT 1 FROM files WHERE project_id = ? AND path = ? AND id != ?').get(projectId, path, excludeId)
+        : db.prepare('SELECT 1 FROM files WHERE project_id = ? AND path = ?').get(projectId, path);
+      return !!row;
+    },
+    rename(id, { path, title }) {
+      db.prepare("UPDATE files SET path = ?, title = ?, updated_at = datetime('now') WHERE id = ?").run(path, title, id);
+      return this.getById(id);
+    },
+    delete(id) {
+      const info = db.prepare('DELETE FROM files WHERE id = ?').run(id);
+      return info.changes > 0;
     }
   };
 }
 
-module.exports = { createFilesRepo };
+module.exports = { createFilesRepo, deriveFilePath };

@@ -12,12 +12,13 @@ test('projects.ejs renders a project card with file details', async () => {
         description: 'demo',
         fileCount: 2,
         updatedAt: new Date().toISOString(),
-        recentFiles: ['README.md', 'Draft.md']
+        recentFiles: [{ id: 10, path: 'README.md' }, { id: 11, path: 'Draft.md' }]
       }
     ]
   });
   assert.match(html, /Sample Project/);
   assert.match(html, /README\.md/);
+  assert.match(html, /href="\/writing\?project=1&file=10"/);
   assert.doesNotMatch(html, /block\(/);
 });
 
@@ -42,6 +43,7 @@ test('writing.ejs renders file content with no stray whitespace', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Test Person', avatarUrl: null },
     activeProviders: []
   });
@@ -53,6 +55,7 @@ test('writing.ejs passes the profile cursorColor through to the editor mount poi
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Test Person', avatarUrl: null, cursorColor: '#5b6eae' },
     activeProviders: []
   });
@@ -63,6 +66,7 @@ test('writing.ejs passes the profile showLineNumbers preference through to the e
   const withLineNumbers = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Test Person', avatarUrl: null, showLineNumbers: true },
     activeProviders: []
   });
@@ -71,6 +75,7 @@ test('writing.ejs passes the profile showLineNumbers preference through to the e
   const withoutLineNumbers = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Test Person', avatarUrl: null, showLineNumbers: false },
     activeProviders: []
   });
@@ -81,6 +86,7 @@ test('writing.ejs renders presence avatars with data-color from profile and prov
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Real User', avatarUrl: null, cursorColor: '#5b6eae' },
     activeProviders: [{ id: 1, label: 'Active Agent', avatarUrl: null, color: '#c96f48' }]
   });
@@ -92,6 +98,7 @@ test('writing.ejs renders a clear-chat button', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Test Person', avatarUrl: null },
     activeProviders: []
   });
@@ -102,6 +109,7 @@ test('writing.ejs renders a pending-references container above the chat input', 
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Test Person', avatarUrl: null },
     activeProviders: []
   });
@@ -112,6 +120,7 @@ test('writing.ejs renders a tool-status element in the chat panel', async () => 
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Test Person', avatarUrl: null },
     activeProviders: []
   });
@@ -122,6 +131,7 @@ test('writing.ejs renders real presence data, not a hardcoded mock', async () =>
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Real User', avatarUrl: null },
     activeProviders: [{ id: 1, label: 'Active Agent', avatarUrl: null }]
   });
@@ -134,6 +144,7 @@ test('writing.ejs renders with an empty activeProviders list', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Solo User', avatarUrl: null },
     activeProviders: []
   });
@@ -144,6 +155,7 @@ test('writing.ejs renders a provider selector when providers are active', async 
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Real User', avatarUrl: null },
     activeProviders: [{ id: 7, label: 'Active Agent', avatarUrl: null }]
   });
@@ -156,12 +168,56 @@ test('writing.ejs disables chat input when no providers are active', async () =>
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
     file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
     profile: { label: 'Solo User', avatarUrl: null },
     activeProviders: []
   });
   assert.doesNotMatch(html, /id="chat-provider-select"/);
   assert.match(html, /id="chat-input"[^>]*disabled/);
   assert.match(html, /id="send-chat-btn"[^>]*disabled/);
+});
+
+test('writing.ejs renders a file-select option for each project file, with the current file marked selected', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 2, path: 'Draft.md', title: 'Draft', content: '# Hello' },
+    files: [
+      { id: 1, path: 'README.md', title: 'README' },
+      { id: 2, path: 'Draft.md', title: 'Draft' }
+    ],
+    profile: { label: 'Test Person', avatarUrl: null },
+    activeProviders: []
+  });
+  assert.match(html, /<option value="1"\s*>README<\/option>/);
+  assert.match(html, /<option value="2" selected>Draft<\/option>/);
+  assert.match(html, /data-file-title="Draft"/);
+});
+
+test('writing.ejs hides the delete-file button when the project has only one file', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
+    profile: { label: 'Test Person', avatarUrl: null },
+    activeProviders: []
+  });
+  assert.doesNotMatch(html, /id="delete-file-btn"/);
+  assert.match(html, /id="new-file-btn"/);
+  assert.match(html, /id="rename-file-btn"/);
+});
+
+test('writing.ejs shows the delete-file button when the project has more than one file', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [
+      { id: 1, path: 'README.md', title: 'README' },
+      { id: 2, path: 'Draft.md', title: 'Draft' }
+    ],
+    profile: { label: 'Test Person', avatarUrl: null },
+    activeProviders: []
+  });
+  assert.match(html, /id="delete-file-btn"/);
 });
 
 test('settings.ejs renders a provider card with masked key and no plaintext', async () => {

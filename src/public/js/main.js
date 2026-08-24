@@ -137,6 +137,155 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // File switcher: switch between a project's files, and create, rename,
+    // or delete them - mirrors the projects-page new/rename-in-place forms
+    // and the existing window.confirm() delete pattern (clear-chat,
+    // delete-provider) rather than introducing new UI conventions.
+    const fileSwitcher = document.getElementById('file-switcher');
+    if (fileSwitcher) {
+        const projectId = fileSwitcher.dataset.projectId;
+        const currentFileId = fileSwitcher.dataset.fileId;
+        const fileSelect = document.getElementById('file-select');
+        const switcherControls = document.getElementById('file-switcher-controls');
+        const newFileBtn = document.getElementById('new-file-btn');
+        const renameFileBtn = document.getElementById('rename-file-btn');
+        const deleteFileBtn = document.getElementById('delete-file-btn');
+
+        if (fileSelect) {
+            fileSelect.addEventListener('change', function() {
+                window.location.href = `/writing?project=${projectId}&file=${fileSelect.value}`;
+            });
+        }
+
+        function openInlineForm(placeholder, initialValue, onSubmit) {
+            if (switcherControls.querySelector('.provider-form')) return;
+
+            const form = document.createElement('form');
+            form.className = 'provider-form file-switcher-form';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = placeholder;
+            input.required = true;
+            input.maxLength = 80;
+            input.autocomplete = 'off';
+            input.value = initialValue || '';
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'submit';
+            confirmBtn.className = 'btn';
+            confirmBtn.setAttribute('aria-label', 'Save');
+            confirmBtn.title = 'Save';
+            confirmBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'btn';
+            cancelBtn.setAttribute('aria-label', 'Cancel');
+            cancelBtn.title = 'Cancel';
+            cancelBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>';
+
+            const actions = document.createElement('div');
+            actions.className = 'provider-form-actions';
+            actions.appendChild(confirmBtn);
+            actions.appendChild(cancelBtn);
+
+            const errorEl = document.createElement('p');
+            errorEl.className = 'provider-form-error';
+            errorEl.hidden = true;
+
+            form.appendChild(input);
+            form.appendChild(actions);
+            form.appendChild(errorEl);
+
+            switcherControls.replaceWith(form);
+            input.focus();
+
+            cancelBtn.addEventListener('click', function() {
+                form.replaceWith(switcherControls);
+            });
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                errorEl.hidden = true;
+                setButtonLoading(confirmBtn, true);
+                onSubmit(input.value.trim())
+                    .then(function(data) {
+                        if (!data.success) {
+                            setButtonLoading(confirmBtn, false);
+                            errorEl.textContent = data.message || 'Something went wrong.';
+                            errorEl.hidden = false;
+                        }
+                        // On success we navigate/reload rather than restore
+                        // switcherControls - the page is about to change.
+                    })
+                    .catch(function() {
+                        setButtonLoading(confirmBtn, false);
+                        errorEl.textContent = 'Could not reach the server — check your connection and try again.';
+                        errorEl.hidden = false;
+                    });
+            });
+        }
+
+        if (newFileBtn) {
+            newFileBtn.addEventListener('click', function() {
+                openInlineForm('File name', '', function(name) {
+                    return fetch(`/api/projects/${projectId}/files`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            window.location.href = `/writing?project=${projectId}&file=${data.file.id}`;
+                        }
+                        return data;
+                    });
+                });
+            });
+        }
+
+        if (renameFileBtn) {
+            renameFileBtn.addEventListener('click', function() {
+                openInlineForm('File name', fileSwitcher.dataset.fileTitle, function(name) {
+                    return fetch(`/api/files/${currentFileId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            window.location.reload();
+                        }
+                        return data;
+                    });
+                });
+            });
+        }
+
+        if (deleteFileBtn) {
+            deleteFileBtn.addEventListener('click', function() {
+                if (!window.confirm('Delete this file? This cannot be undone.')) return;
+                setButtonLoading(deleteFileBtn, true);
+                fetch(`/api/files/${currentFileId}/delete`, { method: 'POST' })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            window.location.href = `/writing?project=${projectId}`;
+                        } else {
+                            setButtonLoading(deleteFileBtn, false);
+                            window.alert(data.message || 'Could not delete file.');
+                        }
+                    })
+                    .catch(function() {
+                        setButtonLoading(deleteFileBtn, false);
+                    });
+            });
+        }
+    }
+
     // Fallback periodic save. The WebSocket sync layer (added in a later
     // task) is the primary durability path once connected; this keeps
     // working standalone if that connection is ever unavailable.

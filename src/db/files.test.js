@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { createConnection } = require('./connection');
 const { migrate } = require('./schema');
 const { createProjectsRepo } = require('./projects');
-const { createFilesRepo } = require('./files');
+const { createFilesRepo, deriveFilePath } = require('./files');
 
 function setup() {
   const db = createConnection(':memory:');
@@ -63,4 +63,79 @@ test('updateYjsSnapshot() returns false for a nonexistent file id', () => {
   const { files } = setup();
   const success = files.updateYjsSnapshot(999999, { content: 'x', contentYjs: Buffer.from([]) });
   assert.equal(success, false);
+});
+
+test('deriveFilePath() appends .md when the name has no extension', () => {
+  assert.equal(deriveFilePath('Chapter 2'), 'Chapter 2.md');
+});
+
+test('deriveFilePath() keeps an extension the name already has', () => {
+  assert.equal(deriveFilePath('notes.txt'), 'notes.txt');
+});
+
+test('createNamed() derives path and title from a plain name', () => {
+  const { files, project } = setup();
+  const file = files.createNamed({ projectId: project.id, name: 'Chapter 2' });
+  assert.equal(file.path, 'Chapter 2.md');
+  assert.equal(file.title, 'Chapter 2');
+  assert.equal(file.content, '');
+});
+
+test('createNamed() passes through initial content', () => {
+  const { files, project } = setup();
+  const file = files.createNamed({ projectId: project.id, name: 'Notes', content: 'hello' });
+  assert.equal(file.content, 'hello');
+});
+
+test('createNamed() deduplicates a colliding path by appending a number before the extension', () => {
+  const { files, project } = setup();
+  files.createNamed({ projectId: project.id, name: 'Chapter 2' });
+  const second = files.createNamed({ projectId: project.id, name: 'Chapter 2' });
+  assert.equal(second.path, 'Chapter 2 2.md');
+  assert.equal(second.title, 'Chapter 2 2');
+  const third = files.createNamed({ projectId: project.id, name: 'Chapter 2' });
+  assert.equal(third.path, 'Chapter 2 3.md');
+});
+
+test('createNamed() dedup does not collide across different projects', () => {
+  const db = createConnection(':memory:');
+  migrate(db);
+  const projects = createProjectsRepo(db);
+  const files = createFilesRepo(db);
+  const projectA = projects.create({ name: 'Project A' });
+  const projectB = projects.create({ name: 'Project B' });
+  files.createNamed({ projectId: projectA.id, name: 'Notes' });
+  // A second project should be free to use the same name without a suffix.
+  const file = files.createNamed({ projectId: projectB.id, name: 'Notes' });
+  assert.equal(file.path, 'Notes.md');
+});
+
+test('pathExistsInProject() reports a collision and respects excludeId', () => {
+  const { files, project } = setup();
+  const file = files.create({ projectId: project.id, path: 'Draft.md' });
+  assert.equal(files.pathExistsInProject(project.id, 'Draft.md'), true);
+  assert.equal(files.pathExistsInProject(project.id, 'Draft.md', file.id), false);
+  assert.equal(files.pathExistsInProject(project.id, 'Other.md'), false);
+});
+
+test('rename() updates path and title together', () => {
+  const { files, project } = setup();
+  const file = files.create({ projectId: project.id, path: 'Untitled.md', title: 'Untitled' });
+  const renamed = files.rename(file.id, { path: 'Renamed.md', title: 'Renamed' });
+  assert.equal(renamed.path, 'Renamed.md');
+  assert.equal(renamed.title, 'Renamed');
+  assert.equal(files.getById(file.id).path, 'Renamed.md');
+});
+
+test('delete() removes the file and returns true', () => {
+  const { files, project } = setup();
+  const file = files.create({ projectId: project.id, path: 'Gone.md' });
+  const success = files.delete(file.id);
+  assert.equal(success, true);
+  assert.equal(files.getById(file.id), undefined);
+});
+
+test('delete() returns false for a missing file', () => {
+  const { files } = setup();
+  assert.equal(files.delete(999999), false);
 });

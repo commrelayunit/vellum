@@ -2,7 +2,39 @@
 
 <div class="editor-container">
     <div class="editor-header">
-        <div class="file-path"><%= project.name %> / <%= file.path %></div>
+        <div class="file-switcher" id="file-switcher" data-project-id="<%= project.id %>" data-file-id="<%= file.id %>" data-file-title="<%= file.title || file.path %>">
+            <span class="project-name"><%= project.name %> /</span>
+            <div class="file-switcher-controls" id="file-switcher-controls">
+                <select id="file-select" aria-label="Switch file">
+                    <% files.forEach(function(f) { %>
+                        <option value="<%= f.id %>" <% if (f.id === file.id) { %>selected<% } %>><%= f.title || f.path %></option>
+                    <% }); %>
+                </select>
+                <div class="editor-actions">
+                    <button class="btn" id="new-file-btn" aria-label="New file" title="New file">
+                        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 5v14"/>
+                            <path d="M5 12h14"/>
+                        </svg>
+                    </button>
+                    <button class="btn" id="rename-file-btn" aria-label="Rename file" title="Rename file">
+                        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 20h9"/>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                        </svg>
+                    </button>
+                    <% if (files.length > 1) { %>
+                        <button class="btn" id="delete-file-btn" aria-label="Delete file" title="Delete file">
+                            <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 6h18"/>
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            </svg>
+                        </button>
+                    <% } %>
+                </div>
+            </div>
+        </div>
         <div class="editor-header-right">
             <div class="presence-stack" id="presence-stack" aria-label="People in this file">
                 <div class="provider-avatar presence-avatar" data-avatar-target data-skip-brand-lookup="true" data-label="<%= profile.label %>" data-color="<%= profile.cursorColor || '' %>" <% if (profile.avatarUrl) { %>data-avatar-url="<%= profile.avatarUrl %>"<% } %> title="<%= profile.label %>"></div>

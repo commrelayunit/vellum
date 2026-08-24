@@ -24,7 +24,7 @@
                     <% if (project.recentFiles.length) { %>
                         <div class="recent-files">
                             <% project.recentFiles.forEach(f => { %>
-                                <span><%= f %></span>
+                                <a href="/writing?project=<%= project.id %>&file=<%= f.id %>"><%= f.path %></a>
                             <% }); %>
                         </div>
                     <% } %>
