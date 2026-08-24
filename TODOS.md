@@ -4,7 +4,7 @@
 
 ### M1: Local Private Workspace (Core MVP) - Minimalist Interface
 - [x] Route setup (/projects, /writing)
-- [x] Project/file CRUD (including renaming a project's name/description in place; renaming a *file* is blocked on a file-switcher UI that doesn't exist yet — see M3-follow-up below)
+- [x] Project/file CRUD, including in-place renaming of both projects and files, and multiple files per project (file-switcher dropdown, new/rename/delete in the editor header)
 - [x] Markdown editor with clean writing surface
 - [x] Save/load content
 - [x] Preview toggle (with working markdown conversion)
@@ -77,9 +77,6 @@
 - [ ] Visible browser-control active state
 - [ ] Limited UI operation permissions
 - [ ] Optional trace/session metadata
-
-### File-switcher UI (blocks file renaming)
-- [ ] A clickable file list in the writing view or project card — there is currently no way to switch between a project's files from the UI at all, so renaming a file has nowhere to attach a UI action
 
 ### Other deferred items
 - [ ] Overleaf-style margin comments (a separate, smaller sub-project from agent editing; never started)
