@@ -401,6 +401,9 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
         baseUrl: provider.baseUrl,
         model: provider.defaultModel,
         reasoningEffort: provider.defaultReasoningEffort,
+        // A file has one persisted conversation history per provider, so this
+        // is the stable, non-secret identity the bridge needs for continuity.
+        sessionId: `provider-${provider.id}-file-${file.id}`,
         filePath: file.path,
         fileContent: agentSession.getCurrentContent(),
         history,

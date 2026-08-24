@@ -63,14 +63,21 @@ function accumulateToolCallDeltas(accumulated, deltaToolCalls) {
 }
 
 function createChatCompletionService({ createClient } = {}) {
-  const clientFactory = createClient || ((apiKey, baseURL) => new OpenAI({ apiKey, baseURL }));
+  const clientFactory = createClient || ((apiKey, baseURL, sessionId) => new OpenAI({
+    apiKey,
+    baseURL,
+    // This is an ordinary HTTP header, not a second protocol.  It lets an
+    // integration such as the OpenClaw Vellum Bridge keep one agent session
+    // per Vellum conversation across independent chat-completion requests.
+    defaultHeaders: sessionId ? { 'x-vellum-session-id': sessionId } : undefined
+  }));
 
   return {
     async complete({
-      apiKey, baseUrl, model, reasoningEffort, filePath, fileContent, history, userMessage, selections,
+      apiKey, baseUrl, model, reasoningEffort, sessionId, filePath, fileContent, history, userMessage, selections,
       onDelta, onToolStart, onToolEnd, executeTool
     }) {
-      const client = clientFactory(apiKey, baseUrl);
+      const client = clientFactory(apiKey, baseUrl, sessionId);
       const messages = [
         { role: 'system', content: buildSystemPrompt(filePath, fileContent) },
         ...history.map(toRequestMessage),

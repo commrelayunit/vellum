@@ -29,6 +29,21 @@ function capturingClient(capture) {
   };
 }
 
+test('complete() passes a stable integration session id to the client factory', async () => {
+  const capture = {};
+  const service = createChatCompletionService({
+    createClient: (apiKey, baseUrl, sessionId) => {
+      capture.client = { apiKey, baseUrl, sessionId };
+      return capturingClient(capture);
+    }
+  });
+  await service.complete({
+    apiKey: 'key', baseUrl: 'http://x', model: 'gpt-5', sessionId: 'provider-7-file-9',
+    filePath: 'a.md', fileContent: '', history: [], userMessage: 'hi', onDelta: () => {}
+  });
+  assert.deepEqual(capture.client, { apiKey: 'key', baseUrl: 'http://x', sessionId: 'provider-7-file-9' });
+});
+
 test('complete() streams deltas via onDelta and returns the full assembled text', async () => {
   const chunks = [
     { choices: [{ delta: { content: 'Hel' } }] },
