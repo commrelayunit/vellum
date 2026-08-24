@@ -26,8 +26,8 @@
     "self-hosted",
     "openai-compatible"
   ],
-  "author": "Vellum Team",
-  "license": "MIT",
+  "author": "C-3PO",
+  "license": "GPLv3",
   "repository": {
     "type": "git",
     "url": "https://github.com/commrelayunit/vellum.git"
