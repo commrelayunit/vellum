@@ -1,7 +1,7 @@
 {
   "name": "vellum",
-  "version": "0.1.0",
-  "description": "A private, self-hostable writing workspace for humans and agents",
+  "version": "1.0.0",
+  "description": "A self-hostable collaborative writing workspace with file-scoped AI chat.",
   "main": "index.js",
   "engines": {
     "node": ">=20"
@@ -20,13 +20,18 @@
   },
   "keywords": [
     "writing",
-    "collaboration",
-    "agent",
+    "collaborative-editing",
+    "ai-agents",
     "markdown",
-    "self-hosted"
+    "self-hosted",
+    "openai-compatible"
   ],
   "author": "Vellum Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/commrelayunit/vellum.git"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
