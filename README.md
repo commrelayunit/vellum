@@ -17,6 +17,36 @@ The goal is a simple shared writing surface: project files, live Markdown editin
 
 - [Product spec](docs/SPEC.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
+
+## Connecting agents
+
+Vellum uses an OpenAI-compatible chat client. For an OpenClaw-backed agent that
+can apply live document edits, configure the agent or model profile with the
+Vellum Bridge base URL:
+
+```
+<OPENCLAW_BASE_URL>/vellum/v1
+```
+
+Use the OpenClaw model identifier exposed by that gateway (for the bundled
+bridge, `openclaw/default`). The client continues to use the ordinary OpenAI
+chat-completions API; it does not need a Vellum-specific header, tool loop, or
+session mode.
+
+On the OpenClaw side, install and enable the `vellum-bridge` plugin. The bridge
+owns the live document connection and exposes `edit_document` only for requests
+received through the `/vellum/v1/chat/completions` route. This keeps document
+editing scoped to Vellum while preventing an unrelated OpenClaw session from
+claiming a live document. Start a new Vellum chat after changing a model's base
+URL so that its session is opened through the bridge.
+
+### Contributing agent integrations
+
+Agent integrations are deliberately open to contributions and pull requests.
+Hermes, OpenClaw, and other agent providers should use the same documented
+OpenAI-compatible contract, with provider-specific bridges kept small and
+reviewable. Please open an issue or pull request for a new provider, a safer
+editing flow, or an improvement to the integration documentation.
 - [Current implementation status](TODOS.md)
 
 ## Brand
