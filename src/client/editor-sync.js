@@ -1,6 +1,6 @@
 // src/client/editor-sync.js
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers, ViewPlugin, Decoration } from '@codemirror/view';
+import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers, ViewPlugin, Decoration, WidgetType } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import * as Y from 'yjs';
 import { yCollab } from 'y-codemirror.next';
@@ -226,6 +226,69 @@ function remoteActiveLinePlugin(ytext, awareness) {
   });
 }
 
+// y-codemirror.next's remote-cursor widget (the small name tag) only ever
+// renders for OTHER peers - by design, you don't usually need to label your
+// own cursor. This adds the missing counterpart: a name tag at the local
+// user's own cursor/selection head, built from the exact same DOM shape and
+// CSS classes (cm-ySelectionCaret/cm-ySelectionCaretDot/cm-ySelectionInfo)
+// the remote widget uses, so one CSS rule styles both consistently.
+class LocalCursorLabelWidget extends WidgetType {
+  constructor(name, color) {
+    super();
+    this.name = name;
+    this.color = color;
+  }
+
+  eq(other) {
+    return other.name === this.name && other.color === this.color;
+  }
+
+  toDOM() {
+    const wrap = document.createElement('span');
+    wrap.className = 'cm-ySelectionCaret';
+    wrap.style.backgroundColor = this.color;
+    wrap.style.borderColor = this.color;
+    wrap.appendChild(document.createTextNode('⁠'));
+    const dot = document.createElement('div');
+    dot.className = 'cm-ySelectionCaretDot';
+    wrap.appendChild(dot);
+    wrap.appendChild(document.createTextNode('⁠'));
+    const info = document.createElement('div');
+    info.className = 'cm-ySelectionInfo';
+    info.textContent = this.name;
+    wrap.appendChild(info);
+    wrap.appendChild(document.createTextNode('⁠'));
+    return wrap;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+function buildLocalCursorLabelDecorations(view, profileLabel, localColor) {
+  const head = view.state.selection.main.head;
+  return Decoration.set([
+    Decoration.widget({ widget: new LocalCursorLabelWidget(profileLabel, localColor), side: 1 }).range(head)
+  ]);
+}
+
+function localCursorLabelPlugin(profileLabel, localColor) {
+  return ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = buildLocalCursorLabelDecorations(view, profileLabel, localColor);
+    }
+
+    update(update) {
+      if (update.selectionSet || update.docChanged || update.viewportChanged) {
+        this.decorations = buildLocalCursorLabelDecorations(update.view, profileLabel, localColor);
+      }
+    }
+  }, {
+    decorations: (v) => v.decorations
+  });
+}
+
 const container = document.getElementById('markdown-editor');
 if (container) {
   const fileId = container.dataset.fileId;
@@ -423,6 +486,7 @@ if (container) {
       EditorView.lineWrapping,
       yCollab(ytext, awareness),
       remoteActiveLinePlugin(ytext, awareness),
+      localCursorLabelPlugin(profileLabel, localColor),
       selectionReferencePlugin(ytext),
       ...(showLineNumbers ? [lineNumbers()] : [])
     ]

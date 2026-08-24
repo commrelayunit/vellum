@@ -367,12 +367,27 @@ body {
   min-width: 0;
 }
 
-.cm-ySelectionInfo {
+/* y-codemirror.next's own base theme hides this until you hover the exact
+   cursor pixel, and floats it above the text line. Scoped under
+   .editor-textarea (rather than the bare .cm-ySelectionInfo the base theme
+   uses) so this reliably outranks it on specificity regardless of whether
+   the page stylesheet or CodeMirror's own injected theme loads last -
+   always visible, positioned right after the cursor instead of floating
+   above it. Applies identically to remote peers' cursors (rendered by
+   yCollab) and the local user's own (rendered by LocalCursorLabelWidget in
+   editor-sync.js), since both reuse this exact class name. */
+.editor-textarea .cm-ySelectionInfo {
   font-family: 'Courier New', monospace;
   font-size: 10px;
+  text-transform: lowercase;
   padding: 1px 4px;
   border-radius: 0;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 2px;
   opacity: 0.9;
+  transition: none;
 }
 
 /* Preview content styling */

@@ -57,6 +57,25 @@ function extractFunctionSource(source, functionName) {
   assert.fail(`could not find the end of ${functionName}`);
 }
 
+// Same brace-matching approach as extractFunctionSource, but for a top-level
+// `class <name> ... { ... }` declaration (matched from `class <name>` rather
+// than `function <name>(`, since a class has no parameter list to anchor on).
+function extractClassSource(source, className) {
+  const marker = `class ${className}`;
+  const markerIndex = source.indexOf(marker);
+  assert.notEqual(markerIndex, -1, `expected a class named ${className}`);
+  const bodyStart = source.indexOf('{', markerIndex);
+  let depth = 0;
+  for (let i = bodyStart; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) return source.slice(markerIndex, i + 1);
+    }
+  }
+  assert.fail(`could not find the end of ${className}`);
+}
+
 test("the ydoc 'update' listener is registered unconditionally, not inside the WebSocket 'open' handler", () => {
   const source = loadSource();
   const openBody = extractOpenHandlerBody(source);
@@ -392,4 +411,63 @@ test('remote active-line decorations skip a peer with no cursor set', () => {
   const found = [];
   decorations.between(0, ytext.length, () => { found.push(1); });
   assert.equal(found.length, 0);
+});
+
+function loadBuildLocalCursorLabelDecorations() {
+  const { Decoration, WidgetType } = require('@codemirror/view');
+  const source = loadSource();
+  const widgetClassSource = extractClassSource(source, 'LocalCursorLabelWidget');
+  const fnSource = extractFunctionSource(source, 'buildLocalCursorLabelDecorations');
+  // Both share one scope so buildLocalCursorLabelDecorations' reference to
+  // LocalCursorLabelWidget (a free variable from the module's top level)
+  // resolves correctly, matching how it's actually wired in the real file.
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source
+  const factory = new Function('Decoration', 'WidgetType', `
+    ${widgetClassSource}
+    return (${fnSource});
+  `);
+  return factory(Decoration, WidgetType);
+}
+
+test('buildLocalCursorLabelDecorations places a widget at the current selection head', () => {
+  const { EditorState } = require('@codemirror/state');
+  const build = loadBuildLocalCursorLabelDecorations();
+
+  const view = { state: EditorState.create({ doc: 'Hello world', selection: { anchor: 5 } }) };
+  const decorations = build(view, 'Ada', '#5b6eae');
+
+  const found = [];
+  decorations.between(0, view.state.doc.length, (from, to, value) => { found.push({ from, to, value }); });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].from, 5);
+  assert.equal(found[0].value.spec.widget.name, 'Ada');
+  assert.equal(found[0].value.spec.widget.color, '#5b6eae');
+});
+
+test('buildLocalCursorLabelDecorations tracks the head, not the anchor, of a non-empty selection', () => {
+  const { EditorState } = require('@codemirror/state');
+  const build = loadBuildLocalCursorLabelDecorations();
+
+  // A selection dragged backwards - anchor at 8, head at 2 - should place
+  // the label at the head (2), matching where the caret actually is.
+  const view = { state: EditorState.create({ doc: 'Hello world', selection: { anchor: 8, head: 2 } }) };
+  const decorations = build(view, 'Ada', '#5b6eae');
+
+  const found = [];
+  decorations.between(0, view.state.doc.length, (from) => { found.push(from); });
+  assert.deepEqual(found, [2]);
+});
+
+test('LocalCursorLabelWidget considers two widgets with the same name/color equal, different otherwise', () => {
+  const source = loadSource();
+  const widgetClassSource = extractClassSource(source, 'LocalCursorLabelWidget');
+  const { WidgetType } = require('@codemirror/view');
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source
+  const LocalCursorLabelWidget = new Function('WidgetType', `${widgetClassSource}\nreturn LocalCursorLabelWidget;`)(WidgetType);
+
+  const a = new LocalCursorLabelWidget('Ada', '#5b6eae');
+  const b = new LocalCursorLabelWidget('Ada', '#5b6eae');
+  const c = new LocalCursorLabelWidget('Grace', '#5b6eae');
+  assert.equal(a.eq(b), true);
+  assert.equal(a.eq(c), false);
 });
