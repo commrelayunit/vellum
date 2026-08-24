@@ -3,7 +3,7 @@ const Y = require('yjs');
 const awarenessProtocol = require('y-protocols/awareness');
 
 const CHUNK_SIZE = 4;
-const CHUNK_DELAY_MS = 20;
+const CHUNK_DELAY_MS = 40;
 // Matches src/public/js/main.js's / src/client/editor-sync.js's existing
 // AVATAR_COLORS/hashString convention exactly, so an agent with no chosen
 // color falls back to the same hash-derived default a provider avatar

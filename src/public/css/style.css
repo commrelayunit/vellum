@@ -25,10 +25,19 @@ body {
   margin: 0;
 }
 
+/* height (not min-height): 100vh is load-bearing. Without a hard cap here,
+   a flex child taller than its content (a long document, a long chat
+   history) grows this container instead of triggering the overflow:auto
+   further down the tree - the WHOLE PAGE scrolls, dragging the chat input
+   off-screen and letting scrolled content show through the header instead
+   of the editor/chat panes scrolling independently the way they're meant
+   to. overflow:hidden backs the cap up: nothing above this point may ever
+   scroll. */
 .app-container {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   max-width: 100%;
   margin: 0 auto;
   padding: 0;
@@ -44,6 +53,11 @@ body {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  flex-shrink: 0;
+  /* Opaque so content can never visually show through a sticky header -
+     harmless now that .app-container can't scroll past it anyway, but
+     correct sticky-header hygiene regardless. */
+  background-color: var(--paper);
 }
 
 .header-left {
@@ -130,6 +144,11 @@ body {
   max-width: 100%;
   margin: 0;
   padding: 0 1rem;
+  /* Flex items default to min-height:auto (their content's intrinsic
+     height), which silently defeats a bounded ancestor - this is what
+     lets a long document/chat history grow past .app-container's cap
+     instead of the panes below scrolling internally. */
+  min-height: 0;
 }
 
 /* Editor container */
@@ -141,6 +160,7 @@ body {
   padding: 0;
   margin: 0;
   max-width: 100%;
+  min-height: 0;
 }
 
 .editor-header {
@@ -148,17 +168,22 @@ body {
   font-size: 12px;
   margin-bottom: 1rem;
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
   justify-content: space-between;
   align-items: center;
 }
 
 .file-switcher {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
   align-items: center;
   gap: 0.35rem;
   color: var(--ink);
   opacity: 0.55;
   font-size: 12px;
+  min-width: 0;
 }
 
 .file-switcher:focus-within,
@@ -168,12 +193,16 @@ body {
 
 .project-name {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
 }
 
 .file-switcher-controls {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 #file-select {
@@ -183,6 +212,43 @@ body {
   font-size: 12px;
   color: var(--ink);
   max-width: 16rem;
+  min-width: 0;
+}
+
+/* Overrides .provider-form's column layout (built for the project-card
+   rename/description flow) with a single row - the file-switcher's compact
+   header context has no room for a second stacked row, and .file-switcher's
+   own align-items:center assumes a same-height sibling, which a column
+   layout here breaks (the taller two-row form pushes .project-name to
+   render vertically centered across both of its rows instead of beside
+   a single-line input). */
+/* .provider-form.file-switcher-form (both classes, not just
+   .file-switcher-form): .provider-form's own flex-direction:column rule is
+   declared later in this file, so at equal specificity it would otherwise
+   win the cascade regardless of source order here - the compound selector
+   raises specificity instead of depending on being the last rule. */
+.provider-form.file-switcher-form {
+  flex-direction: row;
+  align-items: center;
+  flex: initial;
+  min-width: 0;
+  position: relative;
+}
+
+.file-switcher-form input {
+  min-width: 0;
+  max-width: 12rem;
+}
+
+.file-switcher-form .provider-form-actions {
+  margin-top: 0;
+}
+
+.file-switcher-form .provider-form-error {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  white-space: nowrap;
 }
 
 .editor-header-right {
@@ -280,6 +346,7 @@ body {
   padding: 0;
   margin: 0;
   position: relative;
+  min-height: 0;
 }
 
 .editor-textarea {
@@ -292,6 +359,7 @@ body {
   margin: 0;
   width: 100%;
   box-sizing: border-box;
+  min-height: 0;
 }
 
 .editor-textarea .cm-editor {
@@ -361,6 +429,7 @@ body {
   transition: width 0.2s ease;
   position: relative;
   flex-shrink: 0;
+  min-height: 0;
 }
 
 .chat-header {
@@ -404,6 +473,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: 0;
 }
 
 .message {
@@ -449,6 +519,7 @@ body {
 .chat-input {
   display: flex;
   padding: 0.5rem;
+  flex-shrink: 0;
 }
 
 #chat-input {
@@ -621,6 +692,15 @@ body {
 
   .editor-container {
     padding: 0;
+  }
+
+  /* 16rem is fine with room to spare on desktop, but combined with the
+     project-name label and 3 icon buttons it overflows a phone-width
+     .file-switcher, which (like everything else in .editor-container) gets
+     silently clipped by its ancestor's overflow:hidden rather than
+     wrapping or scrolling into view. */
+  #file-select {
+    max-width: 8rem;
   }
 
   .chat-panel {

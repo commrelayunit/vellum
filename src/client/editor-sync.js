@@ -1,6 +1,6 @@
 // src/client/editor-sync.js
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers, ViewPlugin } from '@codemirror/view';
+import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers, ViewPlugin, Decoration } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import * as Y from 'yjs';
 import { yCollab } from 'y-codemirror.next';
@@ -158,6 +158,71 @@ function selectionReferencePlugin(ytext) {
     destroy() {
       this.button.remove();
     }
+  });
+}
+
+// y-codemirror.next's own remote-cursor rendering (yCollab) only paints a
+// background for an actual multi-character selection - for a bare cursor
+// (anchor === head, which is all agent-editor.js's updateCursor() ever
+// sets), it draws just the caret widget, with no line highlight. This adds
+// the missing piece: an .cm-activeLine-style background under any remote
+// peer's cursor line, in that peer's own color, so a collaborator or agent
+// editing the document is exactly as visible as it is for the local user's
+// own cursor.
+function remoteActiveLinePlugin(ytext, awareness) {
+  const ydoc = ytext.doc;
+
+  function buildDecorations(view) {
+    const decorations = [];
+    awareness.getStates().forEach((state, clientId) => {
+      if (clientId === awareness.doc.clientID) return;
+      const cursor = state.cursor;
+      if (!cursor || cursor.anchor == null) return;
+      const pos = Y.createAbsolutePositionFromRelativePosition(cursor.anchor, ydoc);
+      if (!pos || pos.type !== ytext) return;
+      const color = (state.user && state.user.color) || '#30bced';
+      const colorLight = (state.user && state.user.colorLight) || `${color}33`;
+      const index = Math.min(pos.index, view.state.doc.length);
+      const line = view.state.doc.lineAt(index);
+      decorations.push({
+        from: line.from,
+        to: line.from,
+        value: Decoration.line({ attributes: { style: `background-color: ${colorLight}` } })
+      });
+    });
+    return Decoration.set(decorations, true);
+  }
+
+  return ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.view = view;
+      this.decorations = buildDecorations(view);
+      // Mirrors yCollab's own YRemoteSelectionsPluginValue: an awareness
+      // change (a remote cursor moving) has no accompanying doc change, so
+      // it never triggers update() on its own - an empty dispatch forces
+      // CodeMirror to re-run update() and pick up the new position.
+      this.onAwarenessChange = ({ added, updated, removed }) => {
+        const clients = added.concat(updated).concat(removed);
+        if (clients.some((id) => id !== awareness.doc.clientID)) {
+          view.dispatch({});
+        }
+      };
+      awareness.on('change', this.onAwarenessChange);
+    }
+
+    update(update) {
+      // Unconditional, matching yCollab's own YRemoteSelectionsPluginValue:
+      // the awareness-triggered dispatch above is an empty transaction, so
+      // a docChanged/viewportChanged guard here would skip rebuilding on
+      // exactly the update it exists to react to.
+      this.decorations = buildDecorations(update.view);
+    }
+
+    destroy() {
+      awareness.off('change', this.onAwarenessChange);
+    }
+  }, {
+    decorations: (v) => v.decorations
   });
 }
 
@@ -357,6 +422,7 @@ if (container) {
       buildTheme(localColor, showLineNumbers),
       EditorView.lineWrapping,
       yCollab(ytext, awareness),
+      remoteActiveLinePlugin(ytext, awareness),
       selectionReferencePlugin(ytext),
       ...(showLineNumbers ? [lineNumbers()] : [])
     ]

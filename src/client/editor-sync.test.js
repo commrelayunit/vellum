@@ -302,3 +302,94 @@ test('window.__vellumJumpToReference is exposed alongside window.__vellumEditorV
   const source = loadSource();
   assert.match(source, /window\.__vellumJumpToReference = function/);
 });
+
+function loadBuildRemoteActiveLineDecorations() {
+  const Y = require('yjs');
+  const { Decoration } = require('@codemirror/view');
+  const source = loadSource();
+  // buildDecorations is a nested function inside remoteActiveLinePlugin, but
+  // extractFunctionSource does a plain text search - it finds this inner
+  // function's own brace-matched body regardless of nesting. ytext/ydoc/
+  // awareness are free variables inside it (closed over the real outer
+  // function's parameters in the actual module); injecting them as
+  // new Function() parameters reproduces that scoping for the test.
+  const fnSource = extractFunctionSource(source, 'buildDecorations');
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source function
+  const makeBuildDecorations = new Function('Y', 'Decoration', 'ytext', 'ydoc', 'awareness',
+    `return (${fnSource});`);
+  return (ytext, ydoc, awareness, view) => makeBuildDecorations(Y, Decoration, ytext, ydoc, awareness)(view);
+}
+
+function fakeAwareness(localClientId, remoteStates) {
+  const states = new Map(remoteStates);
+  return {
+    doc: { clientID: localClientId },
+    getStates: () => states
+  };
+}
+
+test('remote active-line decorations highlight the line under a remote peer\'s bare cursor', () => {
+  const Y = require('yjs');
+  const { EditorState } = require('@codemirror/state');
+  const build = loadBuildRemoteActiveLineDecorations();
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  ytext.insert(0, 'line one\nline two\nline three');
+  const view = { state: EditorState.create({ doc: ytext.toString() }) };
+
+  // Cursor at index 12 lands inside "line two" (offsets 9-17).
+  const cursorPos = Y.createRelativePositionFromTypeIndex(ytext, 12);
+  const awareness = fakeAwareness(1, [
+    [2, { user: { color: '#c96f48', colorLight: 'color-mix(in srgb, #c96f48 20%, transparent)' }, cursor: { anchor: cursorPos, head: cursorPos } }]
+  ]);
+
+  const decorations = build(ytext, ydoc, awareness, view);
+  const found = [];
+  decorations.between(0, ytext.length, (from, to, value) => { found.push({ from, to, value }); });
+
+  assert.equal(found.length, 1);
+  assert.equal(found[0].from, 9, 'decoration should start at the beginning of "line two"');
+  assert.match(found[0].value.spec.attributes.style, /#c96f48 20%/);
+});
+
+test('remote active-line decorations skip the local client\'s own awareness entry', () => {
+  const Y = require('yjs');
+  const { EditorState } = require('@codemirror/state');
+  const build = loadBuildRemoteActiveLineDecorations();
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  ytext.insert(0, 'only line');
+  const view = { state: EditorState.create({ doc: ytext.toString() }) };
+
+  const cursorPos = Y.createRelativePositionFromTypeIndex(ytext, 3);
+  const awareness = fakeAwareness(1, [
+    [1, { user: { color: '#2f6f64' }, cursor: { anchor: cursorPos, head: cursorPos } }]
+  ]);
+
+  const decorations = build(ytext, ydoc, awareness, view);
+  const found = [];
+  decorations.between(0, ytext.length, () => { found.push(1); });
+  assert.equal(found.length, 0, 'the local client (id 1) must never highlight its own cursor as remote');
+});
+
+test('remote active-line decorations skip a peer with no cursor set', () => {
+  const Y = require('yjs');
+  const { EditorState } = require('@codemirror/state');
+  const build = loadBuildRemoteActiveLineDecorations();
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  ytext.insert(0, 'only line');
+  const view = { state: EditorState.create({ doc: ytext.toString() }) };
+
+  const awareness = fakeAwareness(1, [
+    [2, { user: { color: '#2f6f64' } }]
+  ]);
+
+  const decorations = build(ytext, ydoc, awareness, view);
+  const found = [];
+  decorations.between(0, ytext.length, () => { found.push(1); });
+  assert.equal(found.length, 0);
+});
