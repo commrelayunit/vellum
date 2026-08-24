@@ -139,4 +139,4 @@ Every deployment path is safe to update in place — schema changes apply automa
 
 ## License
 
-MIT
+glp_v3
