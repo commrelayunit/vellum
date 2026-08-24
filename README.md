@@ -1,5 +1,8 @@
 # vellum
 
+[![Vellum repository](https://img.shields.io/badge/repository-vellum-2F6F64?logo=github)](https://github.com/commrelayunit/vellum)
+[![Vellum Bridge repository](https://img.shields.io/badge/OpenClaw-vellum--bridge-1F2937?logo=github)](https://github.com/commrelayunit/vellum-bridge)
+
 Vellum is a private, self-hostable writing workspace for humans and agents.
 
 ## Docs
@@ -9,6 +12,9 @@ Vellum is a private, self-hostable writing workspace for humans and agents.
 - [Proxmox LXC deployment](docs/DEPLOYMENT.md)
 
 ## Connecting agents
+
+The companion [Vellum Bridge](https://github.com/commrelayunit/vellum-bridge)
+is the OpenClaw plugin that provides live document editing for Vellum sessions.
 
 Vellum uses an OpenAI-compatible chat client. For an OpenClaw-backed agent that
 can apply live document edits, configure the agent or model profile with the
