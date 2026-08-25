@@ -35,6 +35,10 @@ function createProjectsRepo(db) {
         "UPDATE projects SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?"
       ).run(name, description || '', id);
       return this.getById(id);
+    },
+    delete(id) {
+      const info = db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+      return info.changes > 0;
     }
   };
 }

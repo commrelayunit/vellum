@@ -12,14 +12,56 @@ test('projects.ejs renders a project card with file details', async () => {
         description: 'demo',
         fileCount: 2,
         updatedAt: new Date().toISOString(),
-        recentFiles: [{ id: 10, path: 'README.md' }, { id: 11, path: 'Draft.md' }]
+        recentFiles: [{ id: 10, path: 'README.md' }, { id: 11, path: 'Draft.md' }],
+        remainingFiles: []
       }
     ]
   });
   assert.match(html, /Sample Project/);
   assert.match(html, /README\.md/);
   assert.match(html, /href="\/writing\?project=1&file=10"/);
+  assert.match(html, /class="file-delete-btn" data-file-id="10"/);
   assert.doesNotMatch(html, /block\(/);
+});
+
+test('projects.ejs shows an expand toggle and a hidden all-files list when a project has more than 3 files', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'projects.ejs'), {
+    projects: [
+      {
+        id: 1,
+        name: 'Big Project',
+        description: '',
+        fileCount: 5,
+        updatedAt: new Date().toISOString(),
+        recentFiles: [{ id: 10, path: 'README.md' }, { id: 11, path: 'Draft.md' }, { id: 12, path: 'Notes.md' }],
+        remainingFiles: [{ id: 13, path: 'Fourth.md' }, { id: 14, path: 'Fifth.md' }]
+      }
+    ]
+  });
+  assert.match(html, /class="project-expand-files-btn"/);
+  assert.match(html, /2 more files/);
+  assert.match(html, /href="\/writing\?project=1&file=13"/);
+  assert.match(html, /Fourth\.md/);
+  // The expanded list must never carry a delete button - only the writing
+  // view is allowed to delete a file, per the approved design.
+  assert.doesNotMatch(html, /Fourth\.md[\s\S]*?file-delete-btn/);
+});
+
+test('projects.ejs hides the expand toggle when a project has 3 or fewer files', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'projects.ejs'), {
+    projects: [
+      {
+        id: 1,
+        name: 'Small Project',
+        description: '',
+        fileCount: 1,
+        updatedAt: new Date().toISOString(),
+        recentFiles: [{ id: 10, path: 'README.md' }],
+        remainingFiles: []
+      }
+    ]
+  });
+  assert.doesNotMatch(html, /project-expand-files-btn/);
 });
 
 test('projects.ejs renders a project card with rename data attributes and an edit button', async () => {
@@ -31,12 +73,14 @@ test('projects.ejs renders a project card with rename data attributes and an edi
         description: 'demo',
         fileCount: 2,
         updatedAt: new Date().toISOString(),
-        recentFiles: []
+        recentFiles: [],
+        remainingFiles: []
       }
     ]
   });
   assert.match(html, /data-project-id="1"[^>]*data-name="Sample Project"[^>]*data-description="demo"/);
   assert.match(html, /class="btn project-edit-btn"/);
+  assert.match(html, /class="btn project-delete-btn"/);
 });
 
 test('writing.ejs renders file content with no stray whitespace', async () => {

@@ -54,3 +54,16 @@ test('update() persists through getById()', () => {
   projects.update(created.id, { name: 'New Name', description: '' });
   assert.equal(projects.getById(created.id).name, 'New Name');
 });
+
+test('delete() removes the project and returns true', () => {
+  const projects = setup();
+  const created = projects.create({ name: 'Gone' });
+  const success = projects.delete(created.id);
+  assert.equal(success, true);
+  assert.equal(projects.getById(created.id), undefined);
+});
+
+test('delete() returns false for a missing project', () => {
+  const projects = setup();
+  assert.equal(projects.delete(999999), false);
+});

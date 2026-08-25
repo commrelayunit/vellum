@@ -139,3 +139,25 @@ test('delete() returns false for a missing file', () => {
   const { files } = setup();
   assert.equal(files.delete(999999), false);
 });
+
+test('deleteByProjectId() removes every file in that project', () => {
+  const { files, project } = setup();
+  files.create({ projectId: project.id, path: 'A.md' });
+  files.create({ projectId: project.id, path: 'B.md' });
+  files.deleteByProjectId(project.id);
+  assert.deepEqual(files.listByProjectId(project.id), []);
+});
+
+test('deleteByProjectId() leaves other projects\' files untouched', () => {
+  const db = createConnection(':memory:');
+  migrate(db);
+  const projects = createProjectsRepo(db);
+  const files = createFilesRepo(db);
+  const projectA = projects.create({ name: 'Project A' });
+  const projectB = projects.create({ name: 'Project B' });
+  files.create({ projectId: projectA.id, path: 'A.md' });
+  const fileB = files.create({ projectId: projectB.id, path: 'B.md' });
+  files.deleteByProjectId(projectA.id);
+  assert.deepEqual(files.listByProjectId(projectA.id), []);
+  assert.equal(files.getById(fileB.id).path, 'B.md');
+});

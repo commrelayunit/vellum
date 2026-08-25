@@ -106,7 +106,8 @@ app.get('/projects', requireAuth, (req, res) => {
       // marker (e.g. "2026-08-18 06:26:40"); without converting to real
       // ISO-8601 UTC, the client would parse it as local time.
       updatedAt: `${latestUpdate.replace(' ', 'T')}Z`,
-      recentFiles: files.slice(0, 3).map((f) => ({ id: f.id, path: f.path }))
+      recentFiles: files.slice(0, 3).map((f) => ({ id: f.id, path: f.path })),
+      remainingFiles: files.slice(3).map((f) => ({ id: f.id, path: f.path }))
     };
   });
   res.render('projects', { projects });
@@ -146,6 +147,21 @@ app.post('/api/projects/:id', requireAuth, (req, res) => {
   const description = typeof req.body.description === 'string' ? req.body.description.trim() : existing.description;
   const project = projectsRepo.update(id, { name, description });
   res.json({ success: true, project });
+});
+
+app.post('/api/projects/:id/delete', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const existing = projectsRepo.getById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'Project not found' });
+  }
+  // Files must go first: the FK (files.project_id REFERENCES projects(id))
+  // is enforced (PRAGMA foreign_keys = ON), so deleting the project first
+  // would fail while any of its files still exist.
+  filesRepo.listByProjectId(id).forEach((file) => chatMessagesRepo.deleteForFile(file.id));
+  filesRepo.deleteByProjectId(id);
+  projectsRepo.delete(id);
+  res.json({ success: true });
 });
 
 app.post('/api/projects/:id/files', requireAuth, (req, res) => {

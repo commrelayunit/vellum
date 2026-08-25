@@ -697,6 +697,69 @@ document.addEventListener('DOMContentLoaded', function() {
     // provider-edit-in-place pattern in Settings.
     if (projectsList) {
         projectsList.addEventListener('click', function(e) {
+            const deleteBtn = e.target.closest('.project-delete-btn');
+            if (deleteBtn) {
+                const card = deleteBtn.closest('.project-card');
+                if (!window.confirm(`Delete "${card.dataset.name}" and everything in it? This cannot be undone.`)) return;
+                setButtonLoading(deleteBtn, true);
+                fetch(`/api/projects/${card.dataset.projectId}/delete`, { method: 'POST' })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            card.remove();
+                        } else {
+                            setButtonLoading(deleteBtn, false);
+                            window.alert(data.message || 'Could not delete project.');
+                        }
+                    })
+                    .catch(function() {
+                        setButtonLoading(deleteBtn, false);
+                    });
+                return;
+            }
+
+            const fileDeleteBtn = e.target.closest('.file-delete-btn');
+            if (fileDeleteBtn) {
+                const fileRow = fileDeleteBtn.closest('.recent-file');
+                const fileName = fileRow.querySelector('a').textContent;
+                if (!window.confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+                setButtonLoading(fileDeleteBtn, true);
+                fetch(`/api/files/${fileDeleteBtn.dataset.fileId}/delete`, { method: 'POST' })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            fileRow.remove();
+                        } else {
+                            setButtonLoading(fileDeleteBtn, false);
+                            window.alert(data.message || 'Could not delete file.');
+                        }
+                    })
+                    .catch(function() {
+                        setButtonLoading(fileDeleteBtn, false);
+                    });
+                return;
+            }
+
+            const expandBtn = e.target.closest('.project-expand-files-btn');
+            if (expandBtn) {
+                const list = expandBtn.nextElementSibling;
+                const inner = list.querySelector('.all-files-list-inner');
+                const isExpanded = expandBtn.getAttribute('aria-expanded') === 'true';
+                if (isExpanded) {
+                    // Set an explicit current height first (transitioning
+                    // FROM 'none'/auto doesn't animate), then collapse on
+                    // the next frame so the transition actually runs.
+                    list.style.maxHeight = `${list.scrollHeight}px`;
+                    requestAnimationFrame(function() {
+                        list.style.maxHeight = '0px';
+                    });
+                } else {
+                    list.style.maxHeight = `${inner.scrollHeight}px`;
+                }
+                expandBtn.setAttribute('aria-expanded', String(!isExpanded));
+                return;
+            }
+
             const editBtn = e.target.closest('.project-edit-btn');
             if (!editBtn) return;
 

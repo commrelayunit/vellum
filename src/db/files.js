@@ -59,6 +59,9 @@ function createFilesRepo(db) {
     delete(id) {
       const info = db.prepare('DELETE FROM files WHERE id = ?').run(id);
       return info.changes > 0;
+    },
+    deleteByProjectId(projectId) {
+      db.prepare('DELETE FROM files WHERE project_id = ?').run(projectId);
     }
   };
 }
