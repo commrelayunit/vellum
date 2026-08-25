@@ -743,7 +743,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const expandBtn = e.target.closest('.project-expand-files-btn');
             if (expandBtn) {
                 const list = expandBtn.nextElementSibling;
-                const inner = list.querySelector('.all-files-list-inner');
                 const isExpanded = expandBtn.getAttribute('aria-expanded') === 'true';
                 if (isExpanded) {
                     // Set an explicit current height first (transitioning
@@ -754,7 +753,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         list.style.maxHeight = '0px';
                     });
                 } else {
-                    list.style.maxHeight = `${inner.scrollHeight}px`;
+                    // Measure list.scrollHeight, not the inner wrapper's -
+                    // .all-files-list-inner's own margin-top isn't part of
+                    // ITS scrollHeight (an element's scrollHeight never
+                    // includes its own margin), but .all-files-list's
+                    // overflow:hidden blocks margin collapsing, so that
+                    // margin genuinely takes up space inside .all-files-list
+                    // and only ITS scrollHeight accounts for it. Measuring
+                    // the inner wrapper instead clipped the last item by
+                    // roughly that margin every time.
+                    list.style.maxHeight = `${list.scrollHeight}px`;
                 }
                 expandBtn.setAttribute('aria-expanded', String(!isExpanded));
                 return;
