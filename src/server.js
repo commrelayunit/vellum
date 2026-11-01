@@ -515,7 +515,7 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
           }));
         }
       });
-      chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label });
+      chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label, providerColor: provider.color });
       writeSseEvent(res, { type: 'done' });
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);

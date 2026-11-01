@@ -353,11 +353,84 @@ function proposalColor(proposal) {
   return PROPOSAL_FALLBACK_COLORS[hashProviderLabel(label) % PROPOSAL_FALLBACK_COLORS.length];
 }
 
+// Matches src/public/js/main.js's initialsFor() - duplicated for the same
+// reason as the color fallback above, this bundle has no import access to
+// the unbundled main.js.
+function initialsFor(label) {
+  const words = label.trim().split(/\s+/).filter((w) => /[a-z0-9]/i.test(w));
+  if (words.length === 0) return '?';
+  if (words.length === 1) {
+    const alnum = words[0].replace(/[^a-z0-9]/gi, '');
+    return (alnum.slice(0, 2) || '?').toUpperCase();
+  }
+  const firstChar = words[0].match(/[a-z0-9]/i)[0];
+  const secondChar = words[1].match(/[a-z0-9]/i)[0];
+  return (firstChar + secondChar).toUpperCase();
+}
+
+// 1-based "Line N"/"Lines N-M" label matching src/public/js/main.js's
+// locationLabel(), just spelled out in full since the popover has room for
+// it (that one is squeezed into a Review-card heading, abbreviated to "LN").
+function popoverLocationLabel(proposal) {
+  if (!proposal.start_line) return '';
+  return proposal.start_line === proposal.end_line ? `Line ${proposal.start_line}` : `Lines ${proposal.start_line}-${proposal.end_line}`;
+}
+
+// Structured hover/focus card: distinct author+location header, then an
+// Original and a Proposed section, each legible on its own rather than one
+// run-together pre-wrapped blob.
 function showProposalPopover(anchorEl, proposal) {
   let popover = document.getElementById('proposal-anchor-popover');
   if (!popover) { popover = document.createElement('div'); popover.id = 'proposal-anchor-popover'; popover.className = 'proposal-anchor-popover'; popover.setAttribute('role', 'tooltip'); document.body.appendChild(popover); }
-  popover.textContent = `${proposal.provider_label || 'Agent'} proposes:\nOriginal: ${proposal.old_text}\nProposed: ${proposal.new_text}`;
-  const rect = anchorEl.getBoundingClientRect(); popover.style.left = `${rect.left}px`; popover.style.top = `${rect.bottom + 4}px`; popover.hidden = false;
+  popover.innerHTML = '';
+  popover.style.setProperty('--agent-color', proposalColor(proposal));
+
+  const header = document.createElement('div');
+  header.className = 'proposal-popover-header';
+  const dot = document.createElement('span');
+  dot.className = 'identity-chip';
+  dot.style.backgroundColor = proposalColor(proposal);
+  dot.textContent = initialsFor(proposal.provider_label || 'Agent');
+  dot.setAttribute('aria-hidden', 'true');
+  header.appendChild(dot);
+  const author = document.createElement('span');
+  author.textContent = proposal.provider_label || 'Agent';
+  header.appendChild(author);
+  const loc = popoverLocationLabel(proposal);
+  if (loc) {
+    const locEl = document.createElement('span');
+    locEl.className = 'proposal-popover-location';
+    locEl.textContent = loc;
+    header.appendChild(locEl);
+  }
+  popover.appendChild(header);
+
+  function section(label, text, cls) {
+    const wrap = document.createElement('div');
+    wrap.className = `proposal-popover-section ${cls}`;
+    const labelEl = document.createElement('div');
+    labelEl.className = 'proposal-popover-field-label';
+    labelEl.textContent = label;
+    const textEl = document.createElement('div');
+    textEl.className = 'proposal-popover-text';
+    textEl.textContent = text;
+    wrap.appendChild(labelEl);
+    wrap.appendChild(textEl);
+    popover.appendChild(wrap);
+  }
+  section('Original', proposal.old_text, 'proposal-popover-old');
+  section('Proposed', proposal.new_text, 'proposal-popover-new');
+
+  const rect = anchorEl.getBoundingClientRect();
+  popover.style.left = `${rect.left}px`;
+  popover.style.top = `${rect.bottom + 6}px`;
+  popover.hidden = false;
+  // Keep the (now larger, structured) card from overflowing the right edge
+  // of the viewport when the anchor sits near it - plain-text's narrower
+  // fixed width rarely needed this, but this one easily can on a phone.
+  const popoverRect = popover.getBoundingClientRect();
+  const overflowX = popoverRect.right - window.innerWidth;
+  if (overflowX > 0) popover.style.left = `${Math.max(4, rect.left - overflowX - 8)}px`;
 }
 function hideProposalPopover() {
   const popover = document.getElementById('proposal-anchor-popover');
@@ -371,8 +444,18 @@ class ProposalDiffWidget extends WidgetType {
     const widget = document.createElement('button');
     widget.type = 'button';
     widget.className = 'proposal-diff-new';
-    widget.style.setProperty('--proposal-color', this.color);
-    widget.textContent = this.proposal.new_text;
+    widget.style.setProperty('--agent-color', this.color);
+    // The proposing agent's color is a secondary cue here (this dot) - the
+    // pill's own background/border is the semantic --diff-added green
+    // (set in CSS), so "this was proposed/added" and "who proposed it"
+    // read as two separate signals instead of one color doing both jobs.
+    const dot = document.createElement('span');
+    dot.className = 'proposal-diff-agent-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    widget.appendChild(dot);
+    const text = document.createElement('span');
+    text.textContent = this.proposal.new_text;
+    widget.appendChild(text);
     widget.setAttribute('aria-label', `Pending edit proposed by ${this.proposal.provider_label || 'Agent'}. Original text: ${this.proposal.old_text}. Proposed replacement shown inline.`);
     widget.setAttribute('aria-haspopup', 'dialog');
     const show = () => showProposalPopover(widget, this.proposal);
@@ -635,7 +718,7 @@ if (container) {
           // The still-unchanged original text, struck through in place so
           // the pending removal is visible without any interaction.
           decorations.push(Decoration.mark({
-            attributes: { class: 'proposal-diff-old', style: `--proposal-color: ${color}`, title: `Original: ${proposal.old_text}` }
+            attributes: { class: 'proposal-diff-old', style: `--agent-color: ${color}`, title: `Original: ${proposal.old_text}` }
           }).range(from, to));
         }
         decorations.push(Decoration.widget({ widget: new ProposalDiffWidget(proposal, color), side: 1 }).range(to));

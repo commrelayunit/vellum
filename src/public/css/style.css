@@ -7,6 +7,29 @@
   --presence-you: #2F6F64;
   --presence-2: #C96F48;
   --presence-3: #5B6EAE;
+  /* Review surface tones. These three were referenced throughout the
+     stylesheet (proposal cards, the revise-context card, proposal text
+     blocks) without ever being defined here, so every var() reference to
+     them was invalid at computed-value time and silently fell back to the
+     property's initial value (currentcolor for a border, transparent for a
+     background) - the "cramped"/flat look flagged in review. Defined for
+     real now, chosen to read as warm accents against --paper/--ink rather
+     than collaborator identity, so they never get confused with the
+     presence-* palette above. */
+  --review-copper: #96602E;
+  --soft-rule: #D8D2C4;
+  --vellum: #F5EFE3;
+  /* Semantic old/deleted vs new/proposed treatment for the diff views
+     (inline editor widget, the proposal hover card, and Review list cards).
+     Deliberately a distinct red/green pair from the presence-* palette so
+     "what changed" (these two) and "who proposed it" (presence-*, used only
+     as a secondary --agent-color accent on these same elements) never
+     compete for the same hue. Both pass WCAG AA (>=4.5:1) as text against
+     --paper, and the old/new distinction is never color-only - it's paired
+     with strikethrough-vs-pill shape so it still reads for colorblind users.
+  */
+  --diff-removed: #9A3324;
+  --diff-added: #2D6A3E;
 }
 
 * {
@@ -149,6 +172,11 @@ body {
      lets a long document/chat history grow past .app-container's cap
      instead of the panes below scrolling internally. */
   min-height: 0;
+  /* Positioned so .chat-panel.review-mode (below) can go position:absolute
+     with inset:0 and land exactly over this row - covering both the editor
+     and the chat panel's own normal slot - rather than relative to the
+     viewport, which would require accounting for the header's height. */
+  position: relative;
 }
 
 /* Editor container */
@@ -470,7 +498,8 @@ select option:hover {
   font-style: italic;
 }
 
-/* Chat panel - collapsible sidebar */
+/* Chat panel - collapsible sidebar, OR (.review-mode) a standalone
+   full-surface overlay - see below. */
 .chat-panel {
   width: 300px;
   display: flex;
@@ -502,44 +531,179 @@ select option:hover {
 .panel-tab { border: 0; background: transparent; color: var(--ink); padding: .35rem .45rem; cursor: pointer; font: inherit; }
 .panel-tab.active { color: var(--presence-you); border-bottom: 2px solid var(--presence-you); }
 #chat-content, #review-content { min-height: 0; display: flex; flex-direction: column; flex: 1; overflow: hidden; }
-#review-content[hidden] { display: none; }
+/* Both need an explicit [hidden] override: the unconditional display:flex
+   above has higher specificity than the browser's own [hidden] UA-stylesheet
+   rule, so without this, setting the `hidden` attribute from main.js's
+   setPanel() would do nothing and the inactive panel would still render -
+   previously only review-content had this, which (now that Review is a
+   full-surface overlay rather than squeezed into the narrow sidebar
+   alongside it) made Chat's messages/composer visibly bleed through behind
+   it. */
+#chat-content[hidden], #review-content[hidden] { display: none; }
+
+/* Review as a standalone work surface: selecting the Review tab takes the
+   whole .chat-panel out of the narrow sidebar slot it shares with Chat and
+   turns it into a full-size overlay positioned against .app-main (which is
+   position:relative for exactly this), covering both the editor and the
+   sidebar's own normal spot. Chat itself is untouched by this - it's still
+   the plain 300px sidebar whenever review-mode isn't active, and clicking
+   the Chat tab (still rendered in this same header) drops review-mode and
+   restores it. Width/height are set via `inset`, not literal 100%, so this
+   wins over the width:100%/height:40vh mobile override below purely on
+   selector specificity (two classes beat one), with no media query needed
+   here. main.js also marks .editor-container inert while this is active,
+   so its now-hidden-behind-the-overlay controls (file switcher, CodeMirror)
+   can't still be reached by Tab or a screen reader. */
+.chat-panel.review-mode {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 40;
+  background: var(--paper);
+  transition: none;
+}
+.chat-panel.review-mode .toggle-chat,
+.chat-panel.review-mode #chat-provider-select,
+.chat-panel.review-mode #clear-chat-btn {
+  display: none;
+}
+.review-file-context {
+  padding: .4rem .6rem;
+  margin: 0 .6rem .4rem;
+  font-size: 11px;
+  opacity: .7;
+  border-bottom: 1px solid var(--soft-rule);
+}
 .review-summary { margin: .6rem; color: var(--ink); }
 .review-list { overflow-y: auto; padding: 0 .6rem .6rem; }
+/* Full-width review mode has room to breathe: cap line length for
+   readability instead of letting proposal cards stretch edge to edge.
+   Deliberately NOT centered (no auto side margins) - the rest of Vellum
+   (editor text, chat messages) all hugs the left edge, and a centered
+   column here would read as a generic centered dashboard layout rather
+   than a natural extension of that same left-aligned writing surface. */
+.chat-panel.review-mode .review-list,
+.chat-panel.review-mode .review-summary,
+.chat-panel.review-mode .review-file-context {
+  max-width: 54rem;
+}
 .proposal-card { border: 1px solid var(--soft-rule); border-left: 3px solid var(--review-copper); padding: .55rem; margin-bottom: .55rem; background: var(--paper); }
-.proposal-card h4 { margin: 0 0 .45rem; text-transform: capitalize; font-size: 12px; }
+.proposal-card h4 { margin: 0 0 .45rem; display: flex; align-items: center; gap: .35rem; font-size: 12px; }
+.proposal-card h4 span { text-transform: capitalize; }
 .proposal-summary { margin: 0 0 .4rem; font-size: 11px; color: var(--ink); opacity: .85; font-family: 'Courier New', monospace; }
+.proposal-diff-pair { display: flex; flex-direction: column; gap: .35rem; }
 .proposal-text { white-space: pre-wrap; max-height: 8rem; overflow: auto; margin: .35rem 0; padding: .35rem; background: var(--vellum); font: 11px/1.4 'Courier New', monospace; }
+/* Same semantic red/green pair as the inline editor diff and the proposal
+   hover card below, so "what changed" reads identically everywhere it
+   shows up rather than just being a plain neutral block here. */
+.proposal-text-old { border-left: 3px solid var(--diff-removed); background: color-mix(in srgb, var(--diff-removed) 10%, var(--vellum)); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--diff-removed) 65%, transparent); }
+.proposal-text-new { border-left: 3px solid var(--diff-added); background: color-mix(in srgb, var(--diff-added) 12%, var(--vellum)); }
+@media (min-width: 900px) {
+  /* Only once Review has the room to actually show two legible columns -
+     the narrow 300px chat sidebar is a non-starter for a side-by-side
+     diff, which is exactly why this is scoped to review-mode. */
+  .chat-panel.review-mode .proposal-diff-pair { flex-direction: row; }
+  .chat-panel.review-mode .proposal-diff-pair > .proposal-text { flex: 1; }
+}
 .proposal-actions { display: flex; gap: .35rem; margin-top: .45rem; }
 .proposal-outcome { margin: .4rem 0 0; font-size: 11px; }
-.proposal-accepted { border-left-color: var(--presence-you); }
-.proposal-rejected, .proposal-stale, .proposal-conflict { opacity: .78; }
+/* State color, not identity color: reuses the same removed/added semantic
+   pair (accepted ~ "kept, like the proposed/added side"; rejected ~
+   "discarded, like the removed side") instead of a presence-* color, so an
+   agent's own identity chip (added in the heading below) never gets read
+   as "this proposal's outcome". */
+.proposal-accepted { border-left-color: var(--diff-added); }
+.proposal-rejected { border-left-color: var(--diff-removed); }
+.proposal-stale, .proposal-conflict { border-left-color: var(--soft-rule); opacity: .78; }
+
+/* A small colored circle carrying a participant's configured (or
+   hash-derived fallback) color plus their initials - the one identity
+   treatment reused for chat authors, Review proposal cards, and the
+   inline/popover proposal views, so "who" reads consistently everywhere
+   rather than only on the presence-stack avatars. Decorative (the name text
+   next to it already carries the identity for assistive tech), hence
+   aria-hidden in the DOM wherever it's built. */
+.identity-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 7px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
 
 /* Inline proposal diff treatment in the editor itself: the still-unchanged
-   original text is struck through in the proposing agent's color, and the
-   proposed replacement is shown immediately after it as a small pill in
-   the same color - visible without any interaction. Both expose the full
-   original/proposed text via the shared #proposal-anchor-popover on hover
-   AND keyboard focus (the widget below is a real focusable button). */
+   original text is struck through and the proposed replacement shown
+   immediately after it as a small pill - visible without any interaction.
+   Both now carry the semantic --diff-removed/--diff-added colors as the
+   PRIMARY signal (what changed), with the proposing agent's own color
+   relegated to a secondary accent (the border + the pill's small dot) -
+   previously the agent's color alone drove both, which meant "who" and
+   "what changed" were impossible to tell apart at a glance. Both expose the
+   full structured original/proposed card via the shared
+   #proposal-anchor-popover on hover AND keyboard focus (the widget below is
+   a real focusable button). */
 .proposal-diff-old {
   text-decoration: line-through;
-  text-decoration-color: var(--proposal-color);
+  text-decoration-color: var(--diff-removed);
   text-decoration-thickness: 2px;
-  background: color-mix(in srgb, var(--proposal-color) 16%, transparent);
+  background: color-mix(in srgb, var(--diff-removed) 16%, transparent);
+  border-bottom: 2px solid var(--agent-color, var(--diff-removed));
   border-radius: 2px;
 }
 .proposal-diff-new {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
   border: 0;
   cursor: pointer;
   font: inherit;
   color: var(--ink);
-  padding: 0 .25rem;
+  padding: 0 .3rem;
   margin: 0 .2rem;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--proposal-color) 22%, transparent);
-  border-bottom: 2px solid var(--proposal-color);
+  background: color-mix(in srgb, var(--diff-added) 20%, transparent);
+  border-bottom: 2px solid var(--agent-color, var(--diff-added));
 }
-.proposal-diff-new:focus-visible { outline: 2px solid var(--proposal-color); outline-offset: 1px; }
-.proposal-anchor-popover { position: fixed; z-index: 20; max-width: 20rem; padding: .45rem; background: var(--ink); color: var(--paper); font: 12px/1.4 'Courier New', monospace; box-shadow: 0 2px 6px #0004; white-space: pre-wrap; }
+.proposal-diff-agent-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--agent-color); flex-shrink: 0; }
+.proposal-diff-new:focus-visible { outline: 2px solid var(--diff-added); outline-offset: 1px; }
+
+/* Structured proposal hover/focus card: replaces a single plain-text,
+   pre-wrapped blob with distinct author/location, Original, and Proposed
+   sections, each legible on its own instead of run together. */
+.proposal-anchor-popover {
+  position: fixed;
+  z-index: 50;
+  min-width: 15rem;
+  max-width: 22rem;
+  padding: .5rem .55rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--soft-rule);
+  border-left: 3px solid var(--agent-color, var(--review-copper));
+  /* Same 3px radius as .proposal-diff-new and the rest of the app's
+     controls - not a rounder "floating card" radius, which would read as
+     dashboard chrome rather than this restrained ink-on-paper surface. */
+  border-radius: 3px;
+  font: 12px/1.4 'Courier New', monospace;
+  /* Kept close to the original plain-text popover's own shadow (0 2px 6px
+     #0004) - just enough to lift it off the editor text behind it, not a
+     pronounced drop shadow. */
+  box-shadow: 0 2px 6px #0004;
+}
+.proposal-popover-header { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-weight: bold; }
+.proposal-popover-location { margin-left: auto; font-weight: normal; opacity: .65; font-size: 11px; }
+.proposal-popover-section { margin-top: .45rem; }
+.proposal-popover-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .6; margin-bottom: .2rem; }
+.proposal-popover-text { white-space: pre-wrap; max-height: 6rem; overflow: auto; padding: .35rem .45rem; border-radius: 3px; }
+.proposal-popover-old .proposal-popover-text { background: color-mix(in srgb, var(--diff-removed) 12%, var(--vellum)); border-left: 2px solid var(--diff-removed); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--diff-removed) 65%, transparent); }
+.proposal-popover-new .proposal-popover-text { background: color-mix(in srgb, var(--diff-added) 14%, var(--vellum)); border-left: 2px solid var(--diff-added); }
 
 /* Revise context card: a persistent, dismissible block above the chat
    composer quoting the proposal being revised, rather than text silently
@@ -581,11 +745,20 @@ select option:hover {
 }
 
 .message {
-  padding: 0;
+  padding: 0 0 0 .5rem;
   max-width: 100%;
+  /* Secondary identity cue (the identity-chip in .message-author is the
+     primary one): a quiet colored rail down the left of every bubble, same
+     color as that author's chip, so identity is still legible at a glance
+     while scrolling past without reading names. Falls back to transparent
+     for messages with no resolved identity (e.g. "Error"). */
+  border-left: 2px solid var(--identity-color, transparent);
 }
 
 .message-author {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
   font-weight: bold;
   margin-bottom: 0.125rem;
   color: var(--ink);
