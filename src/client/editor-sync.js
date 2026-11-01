@@ -347,10 +347,34 @@ function hashProviderLabel(str) {
   for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) | 0;
   return Math.abs(hash);
 }
+
+// Duplicated from src/public/js/main.js's own providerColorsById cache (that
+// file is a separate, unbundled script - this module has no import access
+// to it). proposal.provider_color is only a SNAPSHOT taken when the
+// proposal was created (migrations 0011/0014); resolving through the
+// provider's color AS CONFIGURED RIGHT NOW is what makes the inline editor
+// diff/popover actually track a color changed in Settings, instead of
+// permanently showing whatever it was at proposal-creation time.
+let providerColorsById = null;
+function loadProviderColors() {
+  return fetch('/api/providers/colors')
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.success) return;
+      const map = {};
+      data.providers.forEach((p) => { map[p.id] = p.color; });
+      providerColorsById = map;
+    })
+    .catch(() => {});
+}
+loadProviderColors();
+
 function proposalColor(proposal) {
-  if (proposal.provider_color) return proposal.provider_color;
   const label = proposal.provider_label || 'Agent';
-  return PROPOSAL_FALLBACK_COLORS[hashProviderLabel(label) % PROPOSAL_FALLBACK_COLORS.length];
+  const liveColor = (proposal.provider_id != null && providerColorsById && Object.prototype.hasOwnProperty.call(providerColorsById, proposal.provider_id))
+    ? providerColorsById[proposal.provider_id]
+    : proposal.provider_color;
+  return liveColor || PROPOSAL_FALLBACK_COLORS[hashProviderLabel(label) % PROPOSAL_FALLBACK_COLORS.length];
 }
 
 // Matches src/public/js/main.js's initialsFor() - duplicated for the same
@@ -420,6 +444,21 @@ function showProposalPopover(anchorEl, proposal) {
   }
   section('Original', proposal.old_text, 'proposal-popover-old');
   section('Proposed', proposal.new_text, 'proposal-popover-new');
+
+  // A short proposal should stay compact (CSS's own min-width floor), but a
+  // long one previously hit a flat 22rem ceiling regardless of how much
+  // screen the editor actually had, wrapping into a tall, narrow column on
+  // a wide desktop. Scale the cap to the editor's own on-screen width
+  // instead - .editor-textarea is CodeMirror's immediate wrapper, so its
+  // width is exactly "how much room is actually available" here. An inline
+  // style would otherwise override (not just compete with) the CSS rule's
+  // own min(44rem, 92vw) ceiling, so that same ceiling is re-applied here
+  // in JS too, to keep "considerably more room when available" from also
+  // meaning "unreasonably wide" on a very wide editor.
+  const editorEl = document.querySelector('.editor-textarea');
+  const availableWidth = editorEl ? editorEl.getBoundingClientRect().width : window.innerWidth;
+  const absoluteCeiling = Math.min(44 * 16, window.innerWidth * 0.92);
+  popover.style.maxWidth = `${Math.round(Math.min(availableWidth * 0.82, absoluteCeiling))}px`;
 
   const rect = anchorEl.getBoundingClientRect();
   popover.style.left = `${rect.left}px`;
@@ -701,7 +740,13 @@ if (container) {
     }
   };
 
+  // Tracked so a provider color edited in Settings (picked up by
+  // loadProviderColors() above on visibilitychange) can repaint markers
+  // already on screen by re-running this with the same proposals, rather
+  // than only affecting the next proposal fetched from the server.
+  let lastSetProposals = [];
   window.__vellumSetProposalMarkers = function(proposals) {
+    lastSetProposals = proposals || [];
     const decorations = [];
     for (const proposal of proposals || []) {
       if (proposal.state !== 'pending') continue;
@@ -726,4 +771,11 @@ if (container) {
     }
     window.__vellumEditorView.dispatch({ effects: setProposalMarkers.of(decorations) });
   };
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState !== 'visible') return;
+    loadProviderColors().then(function() {
+      if (lastSetProposals.length) window.__vellumSetProposalMarkers(lastSetProposals);
+    });
+  });
 }

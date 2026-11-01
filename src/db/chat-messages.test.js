@@ -37,6 +37,23 @@ test('listForFile() returns messages for that file in creation order', () => {
   assert.equal(list[1].providerLabel, 'OpenClaw');
 });
 
+// providerId lets the client resolve this message's author color against
+// the provider's CURRENT color instead of only the providerColor snapshot
+// below - see src/public/js/main.js's resolveProviderColorById().
+test('create() persists providerId alongside the providerColor snapshot, both round-tripping through listForFile()', () => {
+  const { chatMessages, fileA } = setup();
+  chatMessages.create({ fileId: fileA.id, role: 'assistant', content: 'Hi', providerId: 7, providerLabel: 'OpenClaw', providerColor: '#5b6eae' });
+  const [message] = chatMessages.listForFile(fileA.id);
+  assert.equal(message.providerId, 7);
+  assert.equal(message.providerColor, '#5b6eae');
+});
+
+test('create() defaults providerId to null when not provided', () => {
+  const { chatMessages, fileA } = setup();
+  const message = chatMessages.create({ fileId: fileA.id, role: 'user', content: 'Hello' });
+  assert.equal(message.providerId, null);
+});
+
 test("listForFile() keeps each file's history isolated from other files", () => {
   const { chatMessages, fileA, fileB } = setup();
   chatMessages.create({ fileId: fileA.id, role: 'user', content: 'For A' });
