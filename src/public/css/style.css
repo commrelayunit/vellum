@@ -578,14 +578,15 @@ select option:hover {
 .review-summary { margin: .6rem; color: var(--ink); }
 .review-list { overflow-y: auto; padding: 0 .6rem .6rem; }
 /* Full-width review mode has room to breathe: cap line length for
-   readability instead of letting proposal cards stretch edge to edge. */
+   readability instead of letting proposal cards stretch edge to edge.
+   Deliberately NOT centered (no auto side margins) - the rest of Vellum
+   (editor text, chat messages) all hugs the left edge, and a centered
+   column here would read as a generic centered dashboard layout rather
+   than a natural extension of that same left-aligned writing surface. */
 .chat-panel.review-mode .review-list,
 .chat-panel.review-mode .review-summary,
 .chat-panel.review-mode .review-file-context {
   max-width: 54rem;
-  margin-left: auto;
-  margin-right: auto;
-  width: 100%;
 }
 .proposal-card { border: 1px solid var(--soft-rule); border-left: 3px solid var(--review-copper); padding: .55rem; margin-bottom: .55rem; background: var(--paper); }
 .proposal-card h4 { margin: 0 0 .45rem; display: flex; align-items: center; gap: .35rem; font-size: 12px; }
@@ -680,15 +681,21 @@ select option:hover {
   position: fixed;
   z-index: 50;
   min-width: 15rem;
-  max-width: 24rem;
-  padding: .6rem .7rem;
+  max-width: 22rem;
+  padding: .5rem .55rem;
   background: var(--paper);
   color: var(--ink);
   border: 1px solid var(--soft-rule);
   border-left: 3px solid var(--agent-color, var(--review-copper));
-  border-radius: 6px;
+  /* Same 3px radius as .proposal-diff-new and the rest of the app's
+     controls - not a rounder "floating card" radius, which would read as
+     dashboard chrome rather than this restrained ink-on-paper surface. */
+  border-radius: 3px;
   font: 12px/1.4 'Courier New', monospace;
-  box-shadow: 0 4px 14px #0003;
+  /* Kept close to the original plain-text popover's own shadow (0 2px 6px
+     #0004) - just enough to lift it off the editor text behind it, not a
+     pronounced drop shadow. */
+  box-shadow: 0 2px 6px #0004;
 }
 .proposal-popover-header { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-weight: bold; }
 .proposal-popover-location { margin-left: auto; font-weight: normal; opacity: .65; font-size: 11px; }
