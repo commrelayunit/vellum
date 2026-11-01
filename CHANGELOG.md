@@ -13,6 +13,20 @@ History prior to 1.0.0 was not tracked in this file.
 
 - Durable, reviewable agent edit proposals with anchored accept/reject history,
   explicit conflict outcomes, and a Review panel alongside file chat.
+- Pending proposals now render inline in the editor as a persistent,
+  author-colored diff (struck-through original, proposed replacement shown
+  alongside it) that stays anchored until Accept/Reject/stale/conflict, with
+  the full original/proposed text exposed on hover and keyboard focus.
+- Revise now opens a persistent, dismissible context card above the chat
+  composer quoting the proposal's original/proposed text and author, instead
+  of inserting text into the input; that context is included with the next
+  message sent.
+
+### Removed
+
+- The "Apply agent edits live" opt-in checkbox. Agent edits always go through
+  the durable proposal workflow now - there is no path in normal product
+  operation for an agent to mutate document text before Accept.
 
 ## [1.0.1] - 2026-08-24
 

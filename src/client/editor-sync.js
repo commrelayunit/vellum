@@ -326,29 +326,68 @@ function localCursorLabelPlugin(profileLabel, localColor) {
 }
 
 // Pending proposals are anchored with the exact relative Yjs positions saved
-// by the server, rather than a fragile text search. The small focusable marker
-// exposes its original text on hover and keyboard focus.
+// by the server, rather than a fragile text search. Two decorations render
+// each one directly in the editor, in the proposing agent's own color, and
+// stay anchored there until Accept/Reject/stale/conflict resolves them:
+//   - a `mark` over the still-unchanged original range (struck through, so
+//     the pending removal is visible without any interaction), and
+//   - an inline widget right after it showing the proposed replacement text
+//     (the "visible add/change treatment").
+// Both expose the full original/proposed text on hover AND keyboard focus
+// (not hover alone) via a shared popover, since the widget is a real
+// focusable button in tab order.
 const setProposalMarkers = StateEffect.define();
-class ProposalMarkerWidget extends WidgetType {
-  constructor(proposal) { super(); this.proposal = proposal; }
-  eq(other) { return other.proposal.id === this.proposal.id && other.proposal.old_text === this.proposal.old_text; }
+
+// Matches src/public/js/main.js's AVATAR_COLORS/hashString fallback exactly,
+// so a proposal from a provider with no chosen color still gets a stable,
+// consistent color rather than defaulting to a single hardcoded hue.
+const PROPOSAL_FALLBACK_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
+function hashProviderLabel(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(hash);
+}
+function proposalColor(proposal) {
+  if (proposal.provider_color) return proposal.provider_color;
+  const label = proposal.provider_label || 'Agent';
+  return PROPOSAL_FALLBACK_COLORS[hashProviderLabel(label) % PROPOSAL_FALLBACK_COLORS.length];
+}
+
+function showProposalPopover(anchorEl, proposal) {
+  let popover = document.getElementById('proposal-anchor-popover');
+  if (!popover) { popover = document.createElement('div'); popover.id = 'proposal-anchor-popover'; popover.className = 'proposal-anchor-popover'; popover.setAttribute('role', 'tooltip'); document.body.appendChild(popover); }
+  popover.textContent = `${proposal.provider_label || 'Agent'} proposes:\nOriginal: ${proposal.old_text}\nProposed: ${proposal.new_text}`;
+  const rect = anchorEl.getBoundingClientRect(); popover.style.left = `${rect.left}px`; popover.style.top = `${rect.bottom + 4}px`; popover.hidden = false;
+}
+function hideProposalPopover() {
+  const popover = document.getElementById('proposal-anchor-popover');
+  if (popover) popover.hidden = true;
+}
+
+class ProposalDiffWidget extends WidgetType {
+  constructor(proposal, color) { super(); this.proposal = proposal; this.color = color; }
+  eq(other) { return other.proposal.id === this.proposal.id && other.proposal.new_text === this.proposal.new_text && other.color === this.color; }
   toDOM() {
-    const marker = document.createElement('button');
-    marker.type = 'button'; marker.className = 'proposal-anchor-marker'; marker.textContent = '✎';
-    marker.setAttribute('aria-label', `Pending edit proposal. Original text: ${this.proposal.old_text}`);
-    marker.setAttribute('aria-haspopup', 'dialog');
-    const show = () => {
-      let popover = document.getElementById('proposal-anchor-popover');
-      if (!popover) { popover = document.createElement('div'); popover.id = 'proposal-anchor-popover'; popover.className = 'proposal-anchor-popover'; popover.setAttribute('role', 'tooltip'); document.body.appendChild(popover); }
-      popover.textContent = `Original text: ${this.proposal.old_text}`;
-      const rect = marker.getBoundingClientRect(); popover.style.left = `${rect.left}px`; popover.style.top = `${rect.bottom + 4}px`; popover.hidden = false;
-    };
-    const hide = () => { const popover = document.getElementById('proposal-anchor-popover'); if (popover) popover.hidden = true; };
-    marker.addEventListener('mouseenter', show); marker.addEventListener('focus', show);
-    marker.addEventListener('mouseleave', hide); marker.addEventListener('blur', hide);
-    return marker;
+    const widget = document.createElement('button');
+    widget.type = 'button';
+    widget.className = 'proposal-diff-new';
+    widget.style.setProperty('--proposal-color', this.color);
+    widget.textContent = this.proposal.new_text;
+    widget.setAttribute('aria-label', `Pending edit proposed by ${this.proposal.provider_label || 'Agent'}. Original text: ${this.proposal.old_text}. Proposed replacement shown inline.`);
+    widget.setAttribute('aria-haspopup', 'dialog');
+    const show = () => showProposalPopover(widget, this.proposal);
+    widget.addEventListener('mouseenter', show); widget.addEventListener('focus', show);
+    widget.addEventListener('mouseleave', hideProposalPopover); widget.addEventListener('blur', hideProposalPopover);
+    return widget;
+  }
+  ignoreEvent(event) {
+    // Let the widget's own focus/hover/click handlers run; only tell
+    // CodeMirror to ignore structural events (e.g. selection) it would
+    // otherwise try to reinterpret as a document interaction.
+    return event.type !== 'mousedown' && event.type !== 'click' && event.type !== 'focus' && event.type !== 'mouseenter' && event.type !== 'mouseleave' && event.type !== 'blur';
   }
 }
+
 const proposalMarkerField = StateField.define({
   create: () => Decoration.none,
   update(markers, tr) {
@@ -584,9 +623,22 @@ if (container) {
     for (const proposal of proposals || []) {
       if (proposal.state !== 'pending') continue;
       try {
-        const anchor = Y.decodeRelativePosition(Uint8Array.from(atob(proposal.anchor), (c) => c.charCodeAt(0)));
-        const position = Y.createAbsolutePositionFromRelativePosition(anchor, ydoc);
-        if (position && position.type === ytext) decorations.push(Decoration.widget({ widget: new ProposalMarkerWidget(proposal), side: -1 }).range(position.index));
+        const anchorPos = Y.createAbsolutePositionFromRelativePosition(
+          Y.decodeRelativePosition(Uint8Array.from(atob(proposal.anchor), (c) => c.charCodeAt(0))), ydoc);
+        const headPos = Y.createAbsolutePositionFromRelativePosition(
+          Y.decodeRelativePosition(Uint8Array.from(atob(proposal.head), (c) => c.charCodeAt(0))), ydoc);
+        if (!anchorPos || anchorPos.type !== ytext) continue;
+        const color = proposalColor(proposal);
+        const from = anchorPos.index;
+        const to = (headPos && headPos.type === ytext) ? Math.max(headPos.index, from) : from;
+        if (to > from) {
+          // The still-unchanged original text, struck through in place so
+          // the pending removal is visible without any interaction.
+          decorations.push(Decoration.mark({
+            attributes: { class: 'proposal-diff-old', style: `--proposal-color: ${color}`, title: `Original: ${proposal.old_text}` }
+          }).range(from, to));
+        }
+        decorations.push(Decoration.widget({ widget: new ProposalDiffWidget(proposal, color), side: 1 }).range(to));
       } catch { /* Bad anchors are inert; they must never break editing. */ }
     }
     window.__vellumEditorView.dispatch({ effects: setProposalMarkers.of(decorations) });
