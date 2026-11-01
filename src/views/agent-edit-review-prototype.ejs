@@ -1,0 +1,40 @@
+<%- include('partials/header', { title: 'Agent edit review prototype', page: 'agent-edit-review-prototype' }) %>
+
+<section class="review-prototype" aria-labelledby="review-prototype-title">
+  <header class="review-prototype-header">
+    <div>
+      <p class="prototype-kicker">Prototype · local preview</p>
+      <h2 id="review-prototype-title">The orchard at low tide</h2>
+      <p class="prototype-subtitle">Chapter 4 · Agent suggestions are staged here only; this view cannot change a document.</p>
+    </div>
+    <div class="review-mode" aria-label="Review mode is active"><span aria-hidden="true">◇</span> Review mode</div>
+  </header>
+
+  <div class="review-prototype-layout">
+    <article class="review-manuscript" aria-label="Manuscript with suggested edits">
+      <div class="manuscript-meta"><span>THE SALT GARDEN</span><span>4 / 12</span></div>
+      <h3>Low tide</h3>
+      <p>By noon the harbour had emptied itself of colour. The boats rested on their sides, patient as animals, and every rope made a small dark line across the mud.</p>
+      <p>Elian walked beyond the last mooring posts with his shoes in his hand. He had meant to find the letter before the water returned, but the wind had worked sand into the folds of his coat and into the places where resolve usually lived.</p>
+      <p>At the edge of the orchard, the trees began without ceremony. Their roots held the bank in a rough clasp, and the apples left from autumn had gone dark in the grass. He stopped beneath the first branch and listened.</p>
+      <p>The sound was not the sea. It was <button class="review-marker" type="button" data-proposal-id="1" aria-describedby="review-detail" aria-label="Suggested replacement: open original text for suggestion 1">the bell from the old schoolhouse, carrying across the flats</button>, slow enough that he could count the spaces between each note.</p>
+      <p>He unfolded the letter once, then again. His sister's hand had always leaned forward, as if the next word were already late.</p>
+      <p>“Come before the light goes,” it said. <button class="review-marker" type="button" data-proposal-id="2" aria-describedby="review-detail" aria-label="Suggested replacement: open original text for suggestion 2">There is something in the west field you should see.</button></p>
+      <p class="review-marker-line"><button class="review-marker" type="button" data-proposal-id="3" aria-describedby="review-detail" aria-label="Suggested insertion: open original text for suggestion 3">[suggested: He took the path between the trees.]</button></p>
+      <p>When he looked up, the tide had begun its patient return.</p>
+      <div class="review-detail" id="review-detail" hidden aria-live="polite"></div>
+    </article>
+
+    <aside class="review-overview" aria-labelledby="review-overview-title">
+      <div class="review-overview-heading">
+        <div><p class="prototype-kicker">Draft by Cora</p><h3 id="review-overview-title"><span id="pending-count">3</span> suggested changes</h3></div>
+        <div class="review-batch-actions"><button class="btn" type="button" id="accept-all">Accept all</button><button class="btn" type="button" id="reject-all">Reject all</button></div>
+      </div>
+      <p class="review-navigation"><button class="btn" id="previous-change" type="button" aria-label="Previous suggestion">←</button><span id="review-position">1 of 3</span><button class="btn" id="next-change" type="button" aria-label="Next suggestion">→</button></p>
+      <div id="review-list" class="review-list" aria-live="polite"></div>
+      <p class="review-empty" id="review-empty" hidden>No suggestions remain in this local preview.</p>
+    </aside>
+  </div>
+</section>
+<script src="/js/agent-edit-review-prototype.js"></script>
+<%- include('partials/footer') %>

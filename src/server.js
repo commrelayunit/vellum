@@ -227,6 +227,13 @@ app.get('/writing', requireAuth, (req, res) => {
   res.render('writing', { project, file, files, profile, activeProviders });
 });
 
+// Deliberately static UX prototype. It has no file id and no API endpoints so
+// it cannot read or modify a workspace document while the review flow is being
+// evaluated.
+app.get('/prototype/agent-edit-review', requireAuth, (req, res) => {
+  res.render('agent-edit-review-prototype');
+});
+
 app.post('/api/save-file/:fileId', requireAuth, (req, res) => {
   const fileId = parseInt(req.params.fileId, 10);
   const { content } = req.body;

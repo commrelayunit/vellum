@@ -600,6 +600,71 @@ select option:hover {
   opacity: 0.6;
 }
 
+/* Agent edit review prototype. Review Copper is intentionally local rather
+   than --presence-2: collaborator identity remains a separate concern. */
+.review-prototype {
+  --review-copper: #a85636;
+  --review-wash: color-mix(in srgb, var(--review-copper) 10%, var(--paper));
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 1.25rem 0 2rem;
+}
+
+.review-prototype-header, .review-overview-heading, .review-card-actions, .review-batch-actions,
+.manuscript-meta, .review-navigation {
+  display: flex;
+  align-items: center;
+}
+
+.review-prototype-header {
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 17%, transparent);
+}
+
+.prototype-kicker { font-size: 10px; letter-spacing: .04em; opacity: .56; text-transform: uppercase; }
+.review-prototype h2, .review-overview h3, .review-manuscript h3 { font-size: 15px; font-weight: normal; }
+.prototype-subtitle { margin-top: .25rem; font-size: 11px; opacity: .65; }
+.review-mode { color: var(--review-copper); font-size: 11px; white-space: nowrap; }
+.review-prototype-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 2rem; padding-top: 1.4rem; }
+.review-manuscript { max-width: 680px; margin: 0 auto; padding: 1.4rem 2.25rem 3rem; line-height: 1.75; font-size: 14px; }
+.manuscript-meta { justify-content: space-between; padding-bottom: 2rem; font-size: 10px; opacity: .48; }
+.review-manuscript h3 { margin-bottom: 1.75rem; text-align: center; letter-spacing: .08em; text-transform: uppercase; }
+.review-manuscript p + p { margin-top: 1rem; }
+.review-marker-line { margin-left: 1rem; }
+.review-marker { display: inline; padding: 0 1px; border: 0; border-bottom: 2px solid var(--review-copper); background: var(--review-wash); color: inherit; cursor: pointer; font: inherit; text-align: inherit; }
+.review-marker::before { content: '◇ '; color: var(--review-copper); font-size: .75em; }
+.review-marker:hover, .review-marker:focus { outline: 1px solid var(--review-copper); outline-offset: 2px; }
+.review-marker.is-resolved { border-bottom-color: transparent; background: transparent; cursor: text; }
+.review-marker.is-resolved::before { display: none; }
+.review-detail { position: sticky; bottom: .75rem; z-index: 2; max-width: 430px; margin: 1rem 0 0 auto; padding: .65rem .75rem; border-left: 2px solid var(--review-copper); background: var(--paper); font-size: 11px; line-height: 1.5; }
+.review-detail del { opacity: .65; }
+.review-overview { align-self: start; padding: .2rem 0 .5rem 1rem; border-left: 1px solid color-mix(in srgb, var(--ink) 17%, transparent); }
+.review-overview-heading { align-items: start; justify-content: space-between; gap: .5rem; }
+.review-batch-actions { gap: .1rem; font-size: 11px; white-space: nowrap; }
+.review-batch-actions .btn { color: var(--review-copper); padding-right: .2rem; padding-left: .2rem; }
+.review-navigation { justify-content: flex-end; gap: .25rem; margin: .8rem 0 .55rem; font-size: 10px; opacity: .65; }
+.review-navigation .btn { padding: .1rem .3rem; font-size: 14px; }
+.review-list { display: grid; gap: .35rem; }
+.review-card { padding: .65rem 0 .6rem .65rem; border-left: 2px solid transparent; }
+.review-card.is-active { border-left-color: var(--review-copper); background: linear-gradient(90deg, var(--review-wash), transparent 80%); }
+.review-card-target { width: 100%; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; text-align: left; }
+.review-card-target span, .review-card-target del, .review-card-target ins { display: block; font-size: 10px; line-height: 1.4; }
+.review-card-target span { margin-bottom: .18rem; opacity: .55; }
+.review-card-target del { opacity: .52; }
+.review-card-target ins { color: var(--review-copper); text-decoration: none; }
+.review-card-actions { gap: .15rem; margin-top: .35rem; }
+.review-card-actions .btn { padding: .1rem .25rem; font-size: 10px; }
+.review-empty { padding: .75rem 0; font-size: 11px; opacity: .55; }
+
+@media (max-width: 768px) {
+  .review-prototype { padding: 1rem 0; }
+  .review-prototype-layout { grid-template-columns: 1fr; gap: 1rem; }
+  .review-manuscript { padding: 1rem 0; }
+  .review-overview { padding: 1rem 0 0; border-top: 1px solid color-mix(in srgb, var(--ink) 17%, transparent); border-left: 0; }
+}
+
 /* Collapsed chat panel: shrink to a narrow rail, keep the toggle reachable */
 .chat-panel.collapsed {
   width: 40px;

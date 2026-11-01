@@ -37,6 +37,19 @@ test('GET /projects renders the (empty) projects list', async () => {
   server.close();
 });
 
+test('GET /prototype/agent-edit-review renders the isolated review mockup', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const res = await fetch(`${base}/prototype/agent-edit-review`, { headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /Prototype · local preview/);
+  assert.match(body, /agent-edit-review-prototype\.js/);
+  server.close();
+});
+
 test('GET /projects shows the 3 most recent files inline and the rest behind an expand toggle', async () => {
   const server = await listen();
   const { port } = server.address();
