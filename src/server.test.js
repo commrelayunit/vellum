@@ -1656,7 +1656,7 @@ test('POST /api/providers/:id preserves defaultReasoningEffort when the field is
   server.close();
 });
 
-test('POST /api/chat/:fileId/messages applies a tool call to the live document and writes tool-start/tool-end SSE frames', async () => {
+test('POST /api/chat/:fileId/messages on an edit_document tool call creates a pending proposal, emits tool-start/tool-end SSE frames, and leaves the persisted and live document unmutated until Accept', async () => {
   const server = await listen();
   const { port } = server.address();
   const base = `http://127.0.0.1:${port}`;
@@ -1666,7 +1666,7 @@ test('POST /api/chat/:fileId/messages applies a tool call to the live document a
     method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({ name: 'Agent Edit Project' })
   });
-  const { file } = await createProject.json();
+  const { project, file } = await createProject.json();
   await fetch(`${base}/api/save-file/${file.id}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({ content: 'Hello world' })
@@ -1684,9 +1684,10 @@ test('POST /api/chat/:fileId/messages applies a tool call to the live document a
 
   app.locals.chatCompletionService = {
     complete: async ({ fileContent, onDelta, onToolStart, onToolEnd, executeTool }) => {
-      assert.equal(fileContent, 'Hello world', 'fileContent should reflect the live document');
+      assert.equal(fileContent, 'Hello world', 'fileContent should reflect the live document before any edit');
       onToolStart('edit_document');
       const result = await executeTool('edit_document', { old_string: 'world', new_string: 'there' });
+      assert.equal(result.success, true);
       onToolEnd('edit_document', result.success);
       onDelta('Done!');
       return 'Done!';
@@ -1702,6 +1703,36 @@ test('POST /api/chat/:fileId/messages applies a tool call to the live document a
   assert.match(body, /"type":"tool-end","tool":"edit_document","success":true/);
   assert.match(body, /"type":"delta","text":"Done!"/);
   assert.match(body, /"type":"done"/);
+
+  // A normal chat tool call must create a durable pending proposal, not
+  // mutate anything directly - this is the whole point of the review workflow.
+  const proposalsRes = await fetch(`${base}/api/files/${file.id}/proposals`, { headers: { Cookie: cookie } });
+  const { proposals } = await proposalsRes.json();
+  assert.equal(proposals.length, 1);
+  assert.equal(proposals[0].state, 'pending');
+  assert.equal(proposals[0].old_text, 'world');
+  assert.equal(proposals[0].new_text, 'there');
+
+  // The persisted file content (what /api/save-file wrote) must be untouched.
+  const writingRes = await fetch(`${base}/writing?project=${project.id}&file=${file.id}`, { headers: { Cookie: cookie } });
+  const writingHtml = await writingRes.text();
+  const persistedContentMatch = writingHtml.match(/<script id="editor-initial-content" type="application\/json">(.*?)<\/script>/);
+  assert.equal(JSON.parse(persistedContentMatch[1]), 'Hello world', 'persisted file content should not be mutated before Accept');
+
+  // The live document (what the agent session reads next turn) must also
+  // still reflect the pre-edit content.
+  app.locals.chatCompletionService = {
+    complete: async ({ fileContent, onDelta }) => {
+      assert.equal(fileContent, 'Hello world', 'live document should not be mutated before Accept');
+      onDelta('ok');
+      return 'ok';
+    }
+  };
+  await fetch(`${base}/api/chat/${file.id}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ providerId: provider.id, message: 'are you sure?' })
+  });
+
   server.close();
 });
 
