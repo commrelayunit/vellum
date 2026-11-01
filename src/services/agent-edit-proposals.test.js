@@ -28,3 +28,11 @@ test('a changed anchored source becomes an explicit conflict and remains reviewa
   const result = service.accept({ fileId: file.id, id: made.proposal.id });
   assert.equal(result.success, false); assert.equal(result.proposal.state, 'conflict'); db.close();
 });
+test('the conditional state claim prevents a duplicate acceptance', () => {
+  const { db, file, manager, service } = setup();
+  const made = service.propose({ fileId: file.id, oldText: 'world', newText: 'Vellum' });
+  assert.equal(service.accept({ fileId: file.id, id: made.proposal.id }).success, true);
+  const duplicate = service.accept({ fileId: file.id, id: made.proposal.id });
+  assert.equal(duplicate.success, false); assert.equal(duplicate.status, 409); assert.equal(duplicate.proposal.state, 'accepted');
+  const { doc } = manager.acquire(file.id); assert.equal(doc.getText('content').toString(), 'Hello Vellum'); manager.release(file.id); db.close();
+});

@@ -11,10 +11,10 @@ function createAgentEditProposalsRepo(db) {
       return db.prepare('SELECT * FROM agent_edit_proposals WHERE file_id = ? ORDER BY created_at DESC, id DESC').all(fileId).map(map);
     },
     getById(id) { return map(db.prepare('SELECT * FROM agent_edit_proposals WHERE id = ?').get(id)); },
-    resolve(id, state, message) {
-      db.prepare(`UPDATE agent_edit_proposals SET state = ?, outcome_message = ?, resolved_at = datetime('now')
+    resolvePending(id, state, message) {
+      const result = db.prepare(`UPDATE agent_edit_proposals SET state = ?, outcome_message = ?, resolved_at = datetime('now')
         WHERE id = ? AND state = 'pending'`).run(state, message || null, id);
-      return this.getById(id);
+      return result.changes === 1 ? this.getById(id) : null;
     },
     deleteForFile(fileId) { db.prepare('DELETE FROM agent_edit_proposals WHERE file_id = ?').run(fileId); }
   };

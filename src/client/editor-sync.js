@@ -1,5 +1,5 @@
 // src/client/editor-sync.js
-import { EditorState } from '@codemirror/state';
+import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { EditorView, keymap, highlightActiveLine, drawSelection, lineNumbers, ViewPlugin, Decoration, WidgetType } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import * as Y from 'yjs';
@@ -325,6 +325,40 @@ function localCursorLabelPlugin(profileLabel, localColor) {
   });
 }
 
+// Pending proposals are anchored with the exact relative Yjs positions saved
+// by the server, rather than a fragile text search. The small focusable marker
+// exposes its original text on hover and keyboard focus.
+const setProposalMarkers = StateEffect.define();
+class ProposalMarkerWidget extends WidgetType {
+  constructor(proposal) { super(); this.proposal = proposal; }
+  eq(other) { return other.proposal.id === this.proposal.id && other.proposal.old_text === this.proposal.old_text; }
+  toDOM() {
+    const marker = document.createElement('button');
+    marker.type = 'button'; marker.className = 'proposal-anchor-marker'; marker.textContent = '✎';
+    marker.setAttribute('aria-label', `Pending edit proposal. Original text: ${this.proposal.old_text}`);
+    marker.setAttribute('aria-haspopup', 'dialog');
+    const show = () => {
+      let popover = document.getElementById('proposal-anchor-popover');
+      if (!popover) { popover = document.createElement('div'); popover.id = 'proposal-anchor-popover'; popover.className = 'proposal-anchor-popover'; popover.setAttribute('role', 'tooltip'); document.body.appendChild(popover); }
+      popover.textContent = `Original text: ${this.proposal.old_text}`;
+      const rect = marker.getBoundingClientRect(); popover.style.left = `${rect.left}px`; popover.style.top = `${rect.bottom + 4}px`; popover.hidden = false;
+    };
+    const hide = () => { const popover = document.getElementById('proposal-anchor-popover'); if (popover) popover.hidden = true; };
+    marker.addEventListener('mouseenter', show); marker.addEventListener('focus', show);
+    marker.addEventListener('mouseleave', hide); marker.addEventListener('blur', hide);
+    return marker;
+  }
+}
+const proposalMarkerField = StateField.define({
+  create: () => Decoration.none,
+  update(markers, tr) {
+    markers = markers.map(tr.changes);
+    for (const effect of tr.effects) if (effect.is(setProposalMarkers)) markers = Decoration.set(effect.value, true);
+    return markers;
+  },
+  provide: (field) => EditorView.decorations.from(field)
+});
+
 const container = document.getElementById('markdown-editor');
 if (container) {
   const fileId = container.dataset.fileId;
@@ -524,6 +558,7 @@ if (container) {
       remoteActiveLinePlugin(ytext, awareness),
       localCursorLabelPlugin(profileLabel, localColor),
       selectionReferencePlugin(ytext),
+      proposalMarkerField,
       ...(showLineNumbers ? [lineNumbers()] : [])
     ]
   });
@@ -542,5 +577,18 @@ if (container) {
       // Silent no-op per spec: malformed/incompatible stored position data
       // should never surface as a user-facing error.
     }
+  };
+
+  window.__vellumSetProposalMarkers = function(proposals) {
+    const decorations = [];
+    for (const proposal of proposals || []) {
+      if (proposal.state !== 'pending') continue;
+      try {
+        const anchor = Y.decodeRelativePosition(Uint8Array.from(atob(proposal.anchor), (c) => c.charCodeAt(0)));
+        const position = Y.createAbsolutePositionFromRelativePosition(anchor, ydoc);
+        if (position && position.type === ytext) decorations.push(Decoration.widget({ widget: new ProposalMarkerWidget(proposal), side: -1 }).range(position.index));
+      } catch { /* Bad anchors are inert; they must never break editing. */ }
+    }
+    window.__vellumEditorView.dispatch({ effects: setProposalMarkers.of(decorations) });
   };
 }

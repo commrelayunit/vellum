@@ -514,8 +514,9 @@ select option:hover {
 .proposal-outcome { margin: .4rem 0 0; font-size: 11px; }
 .proposal-accepted { border-left-color: var(--presence-you); }
 .proposal-rejected, .proposal-stale, .proposal-conflict { opacity: .78; }
-.math-inline, .math-block { font-family: Georgia, serif; background: color-mix(in srgb, var(--vellum) 85%, var(--presence-you)); padding: 0 .18em; }
-.math-block { display: block; margin: .6rem 0; padding: .5rem; overflow-x: auto; }
+.proposal-anchor-marker { border: 0; background: var(--review-copper); color: var(--paper); border-radius: 50%; cursor: pointer; font: 11px/1 sans-serif; height: 16px; width: 16px; margin-right: 2px; padding: 0; vertical-align: middle; }
+.proposal-anchor-marker:focus-visible { outline: 2px solid var(--presence-you); outline-offset: 2px; }
+.proposal-anchor-popover { position: fixed; z-index: 20; max-width: 20rem; padding: .45rem; background: var(--ink); color: var(--paper); font: 12px/1.4 'Courier New', monospace; box-shadow: 0 2px 6px #0004; }
 
 .toggle-chat {
   background: none;

@@ -1704,3 +1704,21 @@ test('POST /api/chat/:fileId/messages applies a tool call to the live document a
   assert.match(body, /"type":"done"/);
   server.close();
 });
+
+test('proposal review routes list, accept, reject, and preserve conflict history', async () => {
+  const server = await listen(); const { port } = server.address(); const base = `http://127.0.0.1:${port}`; const cookie = await login(base);
+  const created = await fetch(`${base}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie }, body: JSON.stringify({ name: 'Review Routes' }) });
+  const { file } = await created.json();
+  await fetch(`${base}/api/save-file/${file.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie }, body: JSON.stringify({ content: 'alpha beta gamma' }) });
+  const accepted = app.locals.proposalService.propose({ fileId: file.id, oldText: 'beta', newText: 'BETA' }).proposal;
+  const rejected = app.locals.proposalService.propose({ fileId: file.id, oldText: 'gamma', newText: 'GAMMA' }).proposal;
+  let response = await fetch(`${base}/api/files/${file.id}/proposals`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200); assert.equal((await response.json()).proposals.filter((p) => p.state === 'pending').length, 2);
+  response = await fetch(`${base}/api/files/${file.id}/proposals/${accepted.id}/accept`, { method: 'POST', headers: { Cookie: cookie } });
+  assert.equal(response.status, 200); assert.equal((await response.json()).proposal.state, 'accepted');
+  response = await fetch(`${base}/api/files/${file.id}/proposals/${accepted.id}/accept`, { method: 'POST', headers: { Cookie: cookie } });
+  assert.equal(response.status, 409); assert.equal((await response.json()).proposal.state, 'accepted');
+  response = await fetch(`${base}/api/files/${file.id}/proposals/${rejected.id}/reject`, { method: 'POST', headers: { Cookie: cookie } });
+  assert.equal(response.status, 200); assert.equal((await response.json()).proposal.state, 'rejected');
+  server.close();
+});

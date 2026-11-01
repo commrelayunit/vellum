@@ -32,3 +32,6 @@ temp/
 
 # Build artifacts
 src/public/js/editor-bundle.js
+src/public/js/preview-renderer.js
+src/public/js/preview-renderer.css
+src/public/js/KaTeX_*

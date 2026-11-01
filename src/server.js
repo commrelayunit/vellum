@@ -50,6 +50,9 @@ const proposalService = createProposalService({ docManager: syncDocManager, prop
 
 const app = express();
 app.locals.chatCompletionService = createChatCompletionService();
+// Exposed for route-level integration tests; routes still call the closed-over
+// service so production behavior has no mutable dependency injection path.
+app.locals.proposalService = proposalService;
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));

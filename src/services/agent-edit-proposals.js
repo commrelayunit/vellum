@@ -36,23 +36,35 @@ function createProposalService({ docManager, proposalsRepo }) {
         const start = Y.createAbsolutePositionFromRelativePosition(decodedPosition(proposal.anchor), doc);
         const end = Y.createAbsolutePositionFromRelativePosition(decodedPosition(proposal.head), doc);
         if (!start || !end || start.type !== ytext || end.type !== ytext) {
-          const stale = proposalsRepo.resolve(id, 'stale', 'The anchored source range no longer exists.');
+          const stale = proposalsRepo.resolvePending(id, 'stale', 'The anchored source range no longer exists.') || proposalsRepo.getById(id);
           return { success: false, status: 409, message: stale.outcome_message, proposal: stale };
         }
         const from = Math.min(start.index, end.index); const to = Math.max(start.index, end.index);
         if (ytext.toString().slice(from, to) !== proposal.old_text) {
-          const conflict = proposalsRepo.resolve(id, 'conflict', 'The source text changed after this proposal was created.');
+          const conflict = proposalsRepo.resolvePending(id, 'conflict', 'The source text changed after this proposal was created.') || proposalsRepo.getById(id);
           return { success: false, status: 409, message: conflict.outcome_message, proposal: conflict };
         }
+        // The conditional transition is the claim. SQLite performs it atomically,
+        // so a second click/request cannot apply the same proposal twice.
+        const accepted = proposalsRepo.resolvePending(id, 'accepted', 'Applied to the current document.');
+        if (!accepted) {
+          const current = proposalsRepo.getById(id);
+          return { success: false, status: 409, message: `Proposal is already ${current.state}`, proposal: current };
+        }
         doc.transact(() => { ytext.delete(from, to - from); ytext.insert(from, proposal.new_text); });
-        return { success: true, proposal: proposalsRepo.resolve(id, 'accepted', 'Applied to the current document.') };
+        return { success: true, proposal: accepted };
       } finally { docManager.release(fileId); }
     },
     reject({ id, fileId }) {
       const proposal = proposalsRepo.getById(id);
       if (!proposal || proposal.file_id !== fileId) return { success: false, status: 404, message: 'Proposal not found' };
       if (proposal.state !== 'pending') return { success: false, status: 409, message: `Proposal is already ${proposal.state}`, proposal };
-      return { success: true, proposal: proposalsRepo.resolve(id, 'rejected', 'Rejected; document unchanged.') };
+      const rejected = proposalsRepo.resolvePending(id, 'rejected', 'Rejected; document unchanged.');
+      if (!rejected) {
+        const current = proposalsRepo.getById(id);
+        return { success: false, status: 409, message: `Proposal is already ${current.state}`, proposal: current };
+      }
+      return { success: true, proposal: rejected };
     }
   };
 }
