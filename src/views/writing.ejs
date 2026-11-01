@@ -96,7 +96,14 @@
     <div class="chat-messages"></div>
     <div class="chat-tool-status" id="chat-tool-status" hidden></div>
     <div class="chat-pending-references" id="chat-pending-references"></div>
-    <label class="agent-edit-mode"><input type="checkbox" id="live-edit-opt-in"> Apply agent edits live <span>(explicit opt-in)</span></label>
+    <div class="revise-context-card" id="revise-context-card" role="group" aria-label="Revising a pending proposal" hidden>
+        <div class="revise-context-header">
+            <span id="revise-context-title"></span>
+            <button type="button" class="revise-context-dismiss" id="revise-context-dismiss" aria-label="Dismiss revise context">×</button>
+        </div>
+        <pre class="proposal-text" id="revise-context-original"></pre>
+        <pre class="proposal-text" id="revise-context-proposed"></pre>
+    </div>
     <div class="chat-input">
         <input type="text" placeholder="<% if (activeProviders.length > 0) { %>Ask about this file...<% } else { %>Activate a provider in Settings to chat<% } %>" id="chat-input" <% if (activeProviders.length === 0) { %>disabled<% } %>>
         <button class="btn btn-primary" id="send-chat-btn" aria-label="Send message" title="Send" <% if (activeProviders.length === 0) { %>disabled<% } %>>

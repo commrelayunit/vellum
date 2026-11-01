@@ -20,7 +20,7 @@ test('migrate records each migration exactly once, even when called twice', () =
   migrate(db);
   migrate(db);
   const applied = db.prepare('SELECT id FROM schema_migrations').all().map((r) => r.id);
-  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace', '0004_chat_messages', '0005_provider_reasoning_effort', '0006_file_content_yjs', '0007_presence_colors', '0008_show_line_numbers', '0009_chat_message_selections', '0010_agent_edit_proposals']);
+  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace', '0004_chat_messages', '0005_provider_reasoning_effort', '0006_file_content_yjs', '0007_presence_colors', '0008_show_line_numbers', '0009_chat_message_selections', '0010_agent_edit_proposals', '0011_agent_edit_proposal_metadata']);
   db.close();
 });
 

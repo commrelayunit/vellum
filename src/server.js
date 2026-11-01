@@ -393,17 +393,14 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   let trimmedMessage;
   let history;
   let validSelections;
-  let editMode;
+  let reviseOf;
   try {
     const fileId = parseInt(req.params.fileId, 10);
     file = filesRepo.getById(fileId);
     if (!file) {
       return res.status(404).json({ success: false, message: 'File not found' });
     }
-    const { providerId, message, selections } = req.body;
-    // Reviewable proposals are the default. Direct editing remains available
-    // only via this explicit opt-in value, never as a silent fallback.
-    editMode = req.body.editMode === 'live' ? 'live' : 'proposal';
+    const { providerId, message, selections, reviseOf: rawReviseOf } = req.body;
     if (typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
@@ -430,6 +427,12 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
             head: s.head
           }))
       : [];
+    // The Revise context card quotes a specific proposal's original/proposed
+    // text above the composer. Only well-shaped payloads are trusted here -
+    // this is user-supplied JSON, not data read back from our own DB.
+    reviseOf = (rawReviseOf && typeof rawReviseOf.oldText === 'string' && typeof rawReviseOf.newText === 'string')
+      ? { providerLabel: typeof rawReviseOf.providerLabel === 'string' ? rawReviseOf.providerLabel : 'Agent', oldText: rawReviseOf.oldText, newText: rawReviseOf.newText }
+      : null;
     chatMessagesRepo.create({ fileId: file.id, role: 'user', content: trimmedMessage, selections: validSelections });
     // Cap history sent to the model to the last 40 prior messages, excluding
     // the user message just inserted above (slice(-41, -1): drop the last
@@ -479,7 +482,13 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
         filePath: file.path,
         fileContent: agentSession.getCurrentContent(),
         history,
-        userMessage: trimmedMessage,
+        // reviseOf quotes the specific proposal the Revise context card was
+        // showing when this message was sent - folded into the prompt sent
+        // to the model, not into the chat_messages row (the user's visible
+        // bubble stays just what they typed).
+        userMessage: reviseOf
+          ? `Revise this previously proposed edit.\nOriginal text:\n${reviseOf.oldText}\n\nPreviously proposed replacement (by ${reviseOf.providerLabel}):\n${reviseOf.newText}\n\nInstruction: ${trimmedMessage}`
+          : trimmedMessage,
         selections: validSelections,
         onDelta: (delta) => writeSseEvent(res, { type: 'delta', text: delta }),
         onToolStart: (tool) => {
@@ -493,13 +502,16 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
           }
           writeSseEvent(res, { type: 'tool-end', tool, success });
         },
+        // Agent edits always go through the durable proposal workflow in
+        // normal product operation - there is no opt-in path back to a
+        // direct, immediately-applied document mutation. See the Review tab
+        // (src/public/js/main.js's loadReview()) for Accept/Reject/Revise.
         executeTool: (name, args) => {
           if (name !== 'edit_document') {
             return Promise.resolve({ success: false, message: `Unknown tool: ${name}` });
           }
-          if (editMode === 'live') return agentSession.applyEdit(args.old_string, args.new_string);
           return Promise.resolve(proposalService.propose({
-            fileId: file.id, providerLabel: provider.label, oldText: args.old_string, newText: args.new_string
+            fileId: file.id, providerLabel: provider.label, providerColor: provider.color, oldText: args.old_string, newText: args.new_string
           }));
         }
       });

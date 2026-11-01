@@ -349,6 +349,39 @@ document.addEventListener('DOMContentLoaded', function() {
         if (reviewing) loadReview();
     }
     function proposalText(label, value) { const el = document.createElement('pre'); el.className = 'proposal-text'; el.textContent = `${label}\n${value}`; return el; }
+    function truncateConcise(text) {
+        const trimmed = (text || '').trim().replace(/\s+/g, ' ');
+        return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
+    }
+    function locationLabel(p) {
+        if (!p.start_line) return '';
+        return p.start_line === p.end_line ? `L${p.start_line}` : `L${p.start_line}-${p.end_line}`;
+    }
+
+    // Revise opens a persistent, dismissible context card above the chat
+    // composer (not a one-shot text insertion) so the quoted proposal stays
+    // visible while the user types their instruction, and is included with
+    // their next send. window-scoped so loadReview()'s Revise button and
+    // sendMessage() below can share state without a module wrapper.
+    const reviseContextCard = document.getElementById('revise-context-card');
+    const reviseContextTitle = document.getElementById('revise-context-title');
+    const reviseContextOriginal = document.getElementById('revise-context-original');
+    const reviseContextProposed = document.getElementById('revise-context-proposed');
+    const reviseContextDismiss = document.getElementById('revise-context-dismiss');
+    let activeReviseContext = null;
+    function showReviseContext(p) {
+        activeReviseContext = { id: p.id, providerLabel: p.provider_label || 'Agent', oldText: p.old_text, newText: p.new_text };
+        reviseContextTitle.textContent = `Revising ${activeReviseContext.providerLabel}'s proposal${locationLabel(p) ? ` (${locationLabel(p)})` : ''}`;
+        reviseContextOriginal.textContent = `Original\n${p.old_text}`;
+        reviseContextProposed.textContent = `Proposed\n${p.new_text}`;
+        reviseContextCard.hidden = false;
+    }
+    function clearReviseContext() {
+        activeReviseContext = null;
+        reviseContextCard.hidden = true;
+    }
+    if (reviseContextDismiss) reviseContextDismiss.addEventListener('click', clearReviseContext);
+
     function loadReview() {
         if (!reviewFileId || !reviewList) return;
         fetch(`/api/files/${reviewFileId}/proposals`).then(async r => {
@@ -361,10 +394,24 @@ document.addEventListener('DOMContentLoaded', function() {
             reviewCount.textContent = pending ? `(${pending})` : '';
             reviewSummary.textContent = `${pending} pending · ${proposals.filter(p => p.state === 'accepted').length} accepted · ${proposals.filter(p => p.state === 'rejected').length} rejected · ${proposals.filter(p => p.state === 'stale').length} stale · ${proposals.filter(p => p.state === 'conflict').length} conflict`;
             if (window.__vellumSetProposalMarkers) window.__vellumSetProposalMarkers(proposals);
+            // If the proposal currently quoted in the Revise context card is
+            // no longer pending (accepted/rejected/stale/conflict, by this
+            // user or a collaborator), the card would otherwise keep
+            // offering to revise a decision that's already settled.
+            if (activeReviseContext) {
+                const stillPending = proposals.find(p => p.id === activeReviseContext.id && p.state === 'pending');
+                if (!stillPending) clearReviseContext();
+            }
             reviewList.innerHTML = '';
             proposals.forEach(p => {
                 const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
-                const heading = document.createElement('h4'); heading.textContent = `${p.state} · ${p.provider_label || 'Agent'}`; card.appendChild(heading);
+                const heading = document.createElement('h4');
+                const loc = locationLabel(p);
+                heading.textContent = `${p.state} · ${p.provider_label || 'Agent'}${loc ? ` · ${loc}` : ''}`;
+                card.appendChild(heading);
+                const summary = document.createElement('p'); summary.className = 'proposal-summary';
+                summary.textContent = `"${truncateConcise(p.old_text)}" → "${truncateConcise(p.new_text)}"`;
+                card.appendChild(summary);
                 card.appendChild(proposalText('Original', p.old_text)); card.appendChild(proposalText('Proposed', p.new_text));
                 if (p.outcome_message) { const outcome = document.createElement('p'); outcome.className = 'proposal-outcome'; outcome.textContent = p.outcome_message; card.appendChild(outcome); }
                 if (p.state === 'pending') {
@@ -381,8 +428,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         finally { loadReview(); }
                     }); actions.appendChild(b); });
                     const revise = document.createElement('button'); revise.className = 'btn'; revise.textContent = 'Revise'; revise.addEventListener('click', () => {
-                        setPanel('chat'); const input = document.getElementById('chat-input');
-                        input.value = `> Proposed edit\n> Original: ${p.old_text}\n> Proposed: ${p.new_text}\n\nPlease revise this proposal: `; input.focus();
+                        setPanel('chat'); showReviseContext(p);
+                        const input = document.getElementById('chat-input'); if (input) input.focus();
                     }); actions.appendChild(revise); card.appendChild(actions);
                 }
                 reviewList.appendChild(card);
@@ -446,7 +493,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
-        function addMessage(author, content, className, timeString, selections) {
+        function addMessage(author, content, className, timeString, selections, reviseContext) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${className || ''}`;
 
@@ -454,6 +501,13 @@ document.addEventListener('DOMContentLoaded', function() {
             authorDiv.className = 'message-author';
             authorDiv.textContent = author;
             messageDiv.appendChild(authorDiv);
+
+            if (reviseContext) {
+                const quoteEl = document.createElement('div');
+                quoteEl.className = 'message-reference message-revise-reference';
+                quoteEl.textContent = `Revising ${reviseContext.providerLabel}'s proposal: "${truncateSnippet(reviseContext.oldText)}" → "${truncateSnippet(reviseContext.newText)}"`;
+                messageDiv.appendChild(quoteEl);
+            }
 
             (selections || []).forEach(function(ref) {
                 const quoteEl = document.createElement('div');
@@ -522,12 +576,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!message || !chatProviderSelect) return;
 
             const selectionsForSend = pendingReferences.slice();
-            addMessage('You', message, '', undefined, selectionsForSend);
+            const reviseOfForSend = activeReviseContext ? { ...activeReviseContext } : null;
+            addMessage('You', message, '', undefined, selectionsForSend, reviseOfForSend);
             chatInput.value = '';
             chatInput.disabled = true;
             setButtonLoading(sendChatBtn, true);
             pendingReferences = [];
             renderPendingReferences();
+            // The quoted context is included with this one send only - once
+            // it's on its way, the card is dismissed rather than silently
+            // reapplying to every message afterward.
+            clearReviseContext();
 
             const providerId = chatProviderSelect.value;
             const providerLabel = chatProviderSelect.options[chatProviderSelect.selectedIndex].textContent;
@@ -536,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/api/chat/${fileId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ providerId, message, selections: selectionsForSend, editMode: document.getElementById('live-edit-opt-in').checked ? 'live' : 'proposal' })
+                body: JSON.stringify({ providerId, message, selections: selectionsForSend, reviseOf: reviseOfForSend })
             })
             .then(function(response) {
                 if (!isSseResponse(response)) {

@@ -10,9 +10,20 @@ function countOccurrences(text, needle) {
   return count;
 }
 
+// 1-based line numbers for the proposal's current location, computed at
+// proposal-creation time from the plain-text offsets - purely a display aid
+// for the Review tab's "location" column, not used for anchoring/resolution
+// (that's done via the Yjs relative positions above/below, which stay
+// correct across concurrent edits in a way a static line number cannot).
+function lineOf(content, index) {
+  let line = 1;
+  for (let i = 0; i < index; i++) if (content[i] === '\n') line += 1;
+  return line;
+}
+
 function createProposalService({ docManager, proposalsRepo }) {
   return {
-    propose({ fileId, providerLabel, oldText, newText }) {
+    propose({ fileId, providerLabel, providerColor, oldText, newText }) {
       if (typeof oldText !== 'string' || typeof newText !== 'string') return { success: false, message: 'old_string and new_string must both be strings' };
       const { doc } = docManager.acquire(fileId);
       try {
@@ -20,9 +31,11 @@ function createProposalService({ docManager, proposalsRepo }) {
         const count = countOccurrences(content, oldText);
         if (count !== 1) return { success: false, message: count ? 'old_string is ambiguous; quote more context' : 'old_string not found in the document' };
         const start = content.indexOf(oldText);
-        const proposal = proposalsRepo.create({ fileId, providerLabel, oldText, newText,
+        const proposal = proposalsRepo.create({ fileId, providerLabel, providerColor, oldText, newText,
           anchor: encodedPosition(Y.createRelativePositionFromTypeIndex(ytext, start)),
-          head: encodedPosition(Y.createRelativePositionFromTypeIndex(ytext, start + oldText.length, -1)) });
+          head: encodedPosition(Y.createRelativePositionFromTypeIndex(ytext, start + oldText.length, -1)),
+          startLine: lineOf(content, start),
+          endLine: lineOf(content, start + oldText.length) });
         return { success: true, message: 'Edit proposed for review.', proposal };
       } finally { docManager.release(fileId); }
     },
