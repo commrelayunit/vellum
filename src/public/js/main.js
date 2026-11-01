@@ -329,6 +329,54 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatProviderSelect = document.getElementById('chat-provider-select');
     const editorForChat = document.getElementById('markdown-editor');
 
+    // Review is a peer tab, not a modal or a second chat. Proposal state is
+    // read from the durable API each time it is opened so reloads and other
+    // collaborators are reflected without trusting browser memory.
+    const reviewTab = document.getElementById('review-tab');
+    const chatTab = document.getElementById('chat-tab');
+    const reviewContent = document.getElementById('review-content');
+    const chatContent = document.getElementById('chat-content');
+    const reviewList = document.getElementById('review-list');
+    const reviewSummary = document.getElementById('review-summary');
+    const reviewCount = document.getElementById('review-pending-count');
+    let reviewFileId = editorForChat && editorForChat.dataset.fileId;
+    function setPanel(panel) {
+        const reviewing = panel === 'review';
+        if (!reviewContent || !chatContent) return;
+        reviewContent.hidden = !reviewing; chatContent.hidden = reviewing;
+        reviewTab.setAttribute('aria-selected', String(reviewing)); chatTab.setAttribute('aria-selected', String(!reviewing));
+        reviewTab.classList.toggle('active', reviewing); chatTab.classList.toggle('active', !reviewing);
+        if (reviewing) loadReview();
+    }
+    function proposalText(label, value) { const el = document.createElement('pre'); el.className = 'proposal-text'; el.textContent = `${label}\n${value}`; return el; }
+    function loadReview() {
+        if (!reviewFileId || !reviewList) return;
+        fetch(`/api/files/${reviewFileId}/proposals`).then(r => r.json()).then(data => {
+            if (!data.success) throw new Error(data.message);
+            const proposals = data.proposals; const pending = proposals.filter(p => p.state === 'pending').length;
+            reviewCount.textContent = pending ? `(${pending})` : '';
+            reviewSummary.textContent = `${pending} pending · ${proposals.filter(p => p.state === 'accepted').length} accepted · ${proposals.filter(p => p.state === 'rejected').length} rejected`;
+            reviewList.innerHTML = '';
+            proposals.forEach(p => {
+                const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
+                const heading = document.createElement('h4'); heading.textContent = `${p.state} · ${p.provider_label || 'Agent'}`; card.appendChild(heading);
+                card.appendChild(proposalText('Original', p.old_text)); card.appendChild(proposalText('Proposed', p.new_text));
+                if (p.outcome_message) { const outcome = document.createElement('p'); outcome.className = 'proposal-outcome'; outcome.textContent = p.outcome_message; card.appendChild(outcome); }
+                if (p.state === 'pending') {
+                    const actions = document.createElement('div'); actions.className = 'proposal-actions';
+                    ['Accept', 'Reject'].forEach(action => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = action; b.addEventListener('click', () => fetch(`/api/files/${reviewFileId}/proposals/${p.id}/${action.toLowerCase()}`, { method: 'POST' }).then(r => r.json()).then(loadReview)); actions.appendChild(b); });
+                    const revise = document.createElement('button'); revise.className = 'btn'; revise.textContent = 'Revise'; revise.addEventListener('click', () => {
+                        setPanel('chat'); const input = document.getElementById('chat-input');
+                        input.value = `> Proposed edit\n> Original: ${p.old_text}\n> Proposed: ${p.new_text}\n\nPlease revise this proposal: `; input.focus();
+                    }); actions.appendChild(revise); card.appendChild(actions);
+                }
+                reviewList.appendChild(card);
+            });
+        }).catch(() => { reviewSummary.textContent = 'Could not load review proposals.'; });
+    }
+    if (reviewTab && chatTab) { reviewTab.addEventListener('click', () => setPanel('review')); chatTab.addEventListener('click', () => setPanel('chat')); }
+    if (reviewFileId) loadReview();
+
     if (chatInput && sendChatBtn && chatMessages && editorForChat) {
         const fileId = editorForChat.dataset.fileId;
         const pendingReferencesEl = document.getElementById('chat-pending-references');
@@ -473,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/api/chat/${fileId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ providerId, message, selections: selectionsForSend })
+                body: JSON.stringify({ providerId, message, selections: selectionsForSend, editMode: document.getElementById('live-edit-opt-in').checked ? 'live' : 'proposal' })
             })
             .then(function(response) {
                 if (!isSseResponse(response)) {
@@ -534,6 +582,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 setButtonLoading(sendChatBtn, false);
                 hideToolStatus();
                 chatInput.focus();
+                if (reviewContent && !reviewContent.hidden) loadReview();
             });
         }
 
@@ -579,13 +628,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function convertMarkdownToHtml(markdown) {
-        // Simple conversion for demo purposes
+        // This deliberately starts by escaping every source character. Markdown
+        // can add only the elements below, so raw HTML (including scripts and
+        // event attributes) is displayed as text rather than executed.
         let html = escapeHtml(markdown)
+            .replace(/^\$\$([\s\S]*?)\$\$$/gm, '<span class="math-block">$1</span>')
+            .replace(/\$([^$\n]+)\$/g, '<span class="math-inline">$1</span>')
+            .replace(/```([^\n]*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
             .replace(/^# (.*)$/gm, '<h1>$1</h1>')
             .replace(/^## (.*)$/gm, '<h2>$1</h2>')
             .replace(/^### (.*)$/gm, '<h3>$1</h3>')
-            .replace(/^\*\*([^*]+)\*\*$/gm, '<strong>$1</strong>')
-            .replace(/^\*([^*]+)\*$/gm, '<em>$1</em>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="noopener noreferrer" target="_blank">$1</a>')
+            .replace(/^[-*] \[ \] (.*)$/gm, '<li><input type="checkbox" disabled> $1</li>')
+            .replace(/^[-*] \[x\] (.*)$/gim, '<li><input type="checkbox" checked disabled> $1</li>')
             .replace(/^\- (.*)$/gm, '<li>$1</li>')
             .replace(/\n\n/g, '</p><p>')
             .replace(/\n/g, '<br>');

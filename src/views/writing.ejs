@@ -68,7 +68,10 @@
 
 <div class="chat-panel" id="chat-panel">
     <div class="chat-header">
-        <h3>Chat</h3>
+        <div class="panel-tabs" role="tablist" aria-label="Assistant panel">
+            <button class="panel-tab active" id="chat-tab" role="tab" aria-selected="true" aria-controls="chat-content">Chat</button>
+            <button class="panel-tab" id="review-tab" role="tab" aria-selected="false" aria-controls="review-content">Review <span id="review-pending-count"></span></button>
+        </div>
         <% if (activeProviders.length > 0) { %>
             <select id="chat-provider-select" aria-label="Choose provider">
                 <% activeProviders.forEach(function(provider) { %>
@@ -89,9 +92,11 @@
             </svg>
         </button>
     </div>
+    <div id="chat-content" role="tabpanel">
     <div class="chat-messages"></div>
     <div class="chat-tool-status" id="chat-tool-status" hidden></div>
     <div class="chat-pending-references" id="chat-pending-references"></div>
+    <label class="agent-edit-mode"><input type="checkbox" id="live-edit-opt-in"> Apply agent edits live <span>(explicit opt-in)</span></label>
     <div class="chat-input">
         <input type="text" placeholder="<% if (activeProviders.length > 0) { %>Ask about this file...<% } else { %>Activate a provider in Settings to chat<% } %>" id="chat-input" <% if (activeProviders.length === 0) { %>disabled<% } %>>
         <button class="btn btn-primary" id="send-chat-btn" aria-label="Send message" title="Send" <% if (activeProviders.length === 0) { %>disabled<% } %>>
@@ -100,6 +105,11 @@
                 <path d="M22 2l-7 20-4-9-9-4 20-7z"/>
             </svg>
         </button>
+    </div>
+    </div>
+    <div id="review-content" role="tabpanel" hidden aria-live="polite">
+        <p class="review-summary" id="review-summary">Loading proposals…</p>
+        <div id="review-list" class="review-list"></div>
     </div>
 </div>
 

@@ -1,0 +1,59 @@
+const Y = require('yjs');
+
+function encodedPosition(position) { return Buffer.from(Y.encodeRelativePosition(position)); }
+function decodedPosition(value) { return Y.decodeRelativePosition(Uint8Array.from(Buffer.from(value, 'base64'))); }
+
+function countOccurrences(text, needle) {
+  if (!needle) return text.length === 0 ? 1 : 0;
+  let count = 0; let i = text.indexOf(needle);
+  while (i !== -1) { count += 1; i = text.indexOf(needle, i + needle.length); }
+  return count;
+}
+
+function createProposalService({ docManager, proposalsRepo }) {
+  return {
+    propose({ fileId, providerLabel, oldText, newText }) {
+      if (typeof oldText !== 'string' || typeof newText !== 'string') return { success: false, message: 'old_string and new_string must both be strings' };
+      const { doc } = docManager.acquire(fileId);
+      try {
+        const ytext = doc.getText('content'); const content = ytext.toString();
+        const count = countOccurrences(content, oldText);
+        if (count !== 1) return { success: false, message: count ? 'old_string is ambiguous; quote more context' : 'old_string not found in the document' };
+        const start = content.indexOf(oldText);
+        const proposal = proposalsRepo.create({ fileId, providerLabel, oldText, newText,
+          anchor: encodedPosition(Y.createRelativePositionFromTypeIndex(ytext, start)),
+          head: encodedPosition(Y.createRelativePositionFromTypeIndex(ytext, start + oldText.length, -1)) });
+        return { success: true, message: 'Edit proposed for review.', proposal };
+      } finally { docManager.release(fileId); }
+    },
+    accept({ id, fileId }) {
+      const proposal = proposalsRepo.getById(id);
+      if (!proposal || proposal.file_id !== fileId) return { success: false, status: 404, message: 'Proposal not found' };
+      if (proposal.state !== 'pending') return { success: false, status: 409, message: `Proposal is already ${proposal.state}`, proposal };
+      const { doc } = docManager.acquire(fileId);
+      try {
+        const ytext = doc.getText('content');
+        const start = Y.createAbsolutePositionFromRelativePosition(decodedPosition(proposal.anchor), doc);
+        const end = Y.createAbsolutePositionFromRelativePosition(decodedPosition(proposal.head), doc);
+        if (!start || !end || start.type !== ytext || end.type !== ytext) {
+          const stale = proposalsRepo.resolve(id, 'stale', 'The anchored source range no longer exists.');
+          return { success: false, status: 409, message: stale.outcome_message, proposal: stale };
+        }
+        const from = Math.min(start.index, end.index); const to = Math.max(start.index, end.index);
+        if (ytext.toString().slice(from, to) !== proposal.old_text) {
+          const conflict = proposalsRepo.resolve(id, 'conflict', 'The source text changed after this proposal was created.');
+          return { success: false, status: 409, message: conflict.outcome_message, proposal: conflict };
+        }
+        doc.transact(() => { ytext.delete(from, to - from); ytext.insert(from, proposal.new_text); });
+        return { success: true, proposal: proposalsRepo.resolve(id, 'accepted', 'Applied to the current document.') };
+      } finally { docManager.release(fileId); }
+    },
+    reject({ id, fileId }) {
+      const proposal = proposalsRepo.getById(id);
+      if (!proposal || proposal.file_id !== fileId) return { success: false, status: 404, message: 'Proposal not found' };
+      if (proposal.state !== 'pending') return { success: false, status: 409, message: `Proposal is already ${proposal.state}`, proposal };
+      return { success: true, proposal: proposalsRepo.resolve(id, 'rejected', 'Rejected; document unchanged.') };
+    }
+  };
+}
+module.exports = { createProposalService };
