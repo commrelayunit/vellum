@@ -23,7 +23,7 @@ function lineOf(content, index) {
 
 function createProposalService({ docManager, proposalsRepo }) {
   return {
-    propose({ fileId, providerLabel, providerColor, oldText, newText }) {
+    propose({ fileId, providerId, providerLabel, providerColor, oldText, newText }) {
       if (typeof oldText !== 'string' || typeof newText !== 'string') return { success: false, message: 'old_string and new_string must both be strings' };
       const { doc } = docManager.acquire(fileId);
       try {
@@ -31,7 +31,7 @@ function createProposalService({ docManager, proposalsRepo }) {
         const count = countOccurrences(content, oldText);
         if (count !== 1) return { success: false, message: count ? 'old_string is ambiguous; quote more context' : 'old_string not found in the document' };
         const start = content.indexOf(oldText);
-        const proposal = proposalsRepo.create({ fileId, providerLabel, providerColor, oldText, newText,
+        const proposal = proposalsRepo.create({ fileId, providerId, providerLabel, providerColor, oldText, newText,
           anchor: encodedPosition(Y.createRelativePositionFromTypeIndex(ytext, start)),
           head: encodedPosition(Y.createRelativePositionFromTypeIndex(ytext, start + oldText.length, -1)),
           startLine: lineOf(content, start),

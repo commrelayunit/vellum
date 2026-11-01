@@ -498,8 +498,10 @@ select option:hover {
   font-style: italic;
 }
 
-/* Chat panel - collapsible sidebar, OR (.review-mode) a standalone
-   full-surface overlay - see below. */
+/* Chat panel - a collapsible sidebar. Chat and Review are peer tabs sharing
+   this one slot (toggled via #chat-content[hidden]/#review-content[hidden]
+   below); the editor to its left is always visible, regardless of which
+   tab is active or whether this panel is collapsed. */
 .chat-panel {
   width: 300px;
   display: flex;
@@ -541,29 +543,12 @@ select option:hover {
    it. */
 #chat-content[hidden], #review-content[hidden] { display: none; }
 
-/* Review as a standalone work surface: selecting the Review tab takes the
-   whole .chat-panel out of the narrow sidebar slot it shares with Chat and
-   turns it into a full-size overlay positioned against .app-main (which is
-   position:relative for exactly this), covering both the editor and the
-   sidebar's own normal spot. Chat itself is untouched by this - it's still
-   the plain 300px sidebar whenever review-mode isn't active, and clicking
-   the Chat tab (still rendered in this same header) drops review-mode and
-   restores it. Width/height are set via `inset`, not literal 100%, so this
-   wins over the width:100%/height:40vh mobile override below purely on
-   selector specificity (two classes beat one), with no media query needed
-   here. main.js also marks .editor-container inert while this is active,
-   so its now-hidden-behind-the-overlay controls (file switcher, CodeMirror)
-   can't still be reached by Tab or a screen reader. */
-.chat-panel.review-mode {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  height: auto;
-  z-index: 40;
-  background: var(--paper);
-  transition: none;
-}
-.chat-panel.review-mode .toggle-chat,
+/* Review is a peer tab sharing the same 300px sidebar slot as Chat, not a
+   standalone surface - selecting it just swaps #chat-content/#review-content
+   (display handled by the #chat-content[hidden]/#review-content[hidden]
+   rule above). .review-mode only toggles which of Chat's own controls make
+   sense to show; the editor stays visible and interactive underneath at all
+   times (no `inert`, no overlay, no z-index stacking). */
 .chat-panel.review-mode #chat-provider-select,
 .chat-panel.review-mode #clear-chat-btn {
   display: none;
@@ -577,17 +562,6 @@ select option:hover {
 }
 .review-summary { margin: .6rem; color: var(--ink); }
 .review-list { overflow-y: auto; padding: 0 .6rem .6rem; }
-/* Full-width review mode has room to breathe: cap line length for
-   readability instead of letting proposal cards stretch edge to edge.
-   Deliberately NOT centered (no auto side margins) - the rest of Vellum
-   (editor text, chat messages) all hugs the left edge, and a centered
-   column here would read as a generic centered dashboard layout rather
-   than a natural extension of that same left-aligned writing surface. */
-.chat-panel.review-mode .review-list,
-.chat-panel.review-mode .review-summary,
-.chat-panel.review-mode .review-file-context {
-  max-width: 54rem;
-}
 .proposal-card { border: 1px solid var(--soft-rule); border-left: 3px solid var(--review-copper); padding: .55rem; margin-bottom: .55rem; background: var(--paper); }
 .proposal-card h4 { margin: 0 0 .45rem; display: flex; align-items: center; gap: .35rem; font-size: 12px; }
 .proposal-card h4 span { text-transform: capitalize; }
@@ -599,13 +573,6 @@ select option:hover {
    shows up rather than just being a plain neutral block here. */
 .proposal-text-old { border-left: 3px solid var(--diff-removed); background: color-mix(in srgb, var(--diff-removed) 10%, var(--vellum)); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--diff-removed) 65%, transparent); }
 .proposal-text-new { border-left: 3px solid var(--diff-added); background: color-mix(in srgb, var(--diff-added) 12%, var(--vellum)); }
-@media (min-width: 900px) {
-  /* Only once Review has the room to actually show two legible columns -
-     the narrow 300px chat sidebar is a non-starter for a side-by-side
-     diff, which is exactly why this is scoped to review-mode. */
-  .chat-panel.review-mode .proposal-diff-pair { flex-direction: row; }
-  .chat-panel.review-mode .proposal-diff-pair > .proposal-text { flex: 1; }
-}
 .proposal-actions { display: flex; gap: .35rem; margin-top: .45rem; }
 .proposal-outcome { margin: .4rem 0 0; font-size: 11px; }
 /* State color, not identity color: reuses the same removed/added semantic
@@ -641,20 +608,25 @@ select option:hover {
 /* Inline proposal diff treatment in the editor itself: the still-unchanged
    original text is struck through and the proposed replacement shown
    immediately after it as a small pill - visible without any interaction.
-   Both now carry the semantic --diff-removed/--diff-added colors as the
-   PRIMARY signal (what changed), with the proposing agent's own color
-   relegated to a secondary accent (the border + the pill's small dot) -
-   previously the agent's color alone drove both, which meant "who" and
-   "what changed" were impossible to tell apart at a glance. Both expose the
-   full structured original/proposed card via the shared
-   #proposal-anchor-popover on hover AND keyboard focus (the widget below is
-   a real focusable button). */
+   Both are painted in the proposing author's own --agent-color (always set
+   inline by editor-sync.js, resolved live from that provider/profile's
+   CURRENT configured color, not a stale snapshot) - editor-level color here
+   means "who proposed this", matching Chat. "What changed" (old vs new) is
+   never color-only: it's the strikethrough-text-vs-rounded-pill shape (plus
+   the pill's small leading dot) that tells old from new, so a single-hue
+   author never reads as ambiguous. The semantic red/green removed/added
+   pair (--diff-removed/--diff-added) is reserved for the Review tab's own
+   proposal cards (.proposal-text-old/.proposal-text-new above), which are a
+   distinct state/outcome context from "whose edit is this in the document
+   right now". Both expose the full structured original/proposed card via
+   the shared #proposal-anchor-popover on hover AND keyboard focus (the
+   widget below is a real focusable button). */
 .proposal-diff-old {
   text-decoration: line-through;
-  text-decoration-color: var(--diff-removed);
+  text-decoration-color: var(--agent-color);
   text-decoration-thickness: 2px;
-  background: color-mix(in srgb, var(--diff-removed) 16%, transparent);
-  border-bottom: 2px solid var(--agent-color, var(--diff-removed));
+  background: color-mix(in srgb, var(--agent-color) 16%, transparent);
+  border-bottom: 2px solid var(--agent-color);
   border-radius: 2px;
 }
 .proposal-diff-new {
@@ -668,20 +640,26 @@ select option:hover {
   padding: 0 .3rem;
   margin: 0 .2rem;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--diff-added) 20%, transparent);
-  border-bottom: 2px solid var(--agent-color, var(--diff-added));
+  background: color-mix(in srgb, var(--agent-color) 20%, transparent);
+  border-bottom: 2px solid var(--agent-color);
 }
 .proposal-diff-agent-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--agent-color); flex-shrink: 0; }
-.proposal-diff-new:focus-visible { outline: 2px solid var(--diff-added); outline-offset: 1px; }
+.proposal-diff-new:focus-visible { outline: 2px solid var(--agent-color); outline-offset: 1px; }
 
 /* Structured proposal hover/focus card: replaces a single plain-text,
    pre-wrapped blob with distinct author/location, Original, and Proposed
-   sections, each legible on its own instead of run together. */
+   sections, each legible on its own instead of run together. min-width is
+   a CSS floor; max-width is overridden inline by editor-sync.js's
+   showProposalPopover() as a fraction of the editor's current on-screen
+   width (clamped against this rule's own upper bound below) so a short
+   proposal stays compact while a long one gets meaningfully more room on a
+   wide editor, instead of wrapping into a tall, narrow column regardless of
+   how much space is actually available. */
 .proposal-anchor-popover {
   position: fixed;
   z-index: 50;
   min-width: 15rem;
-  max-width: 22rem;
+  max-width: min(44rem, 92vw);
   padding: .5rem .55rem;
   background: var(--paper);
   color: var(--ink);
@@ -702,8 +680,12 @@ select option:hover {
 .proposal-popover-section { margin-top: .45rem; }
 .proposal-popover-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .6; margin-bottom: .2rem; }
 .proposal-popover-text { white-space: pre-wrap; max-height: 6rem; overflow: auto; padding: .35rem .45rem; border-radius: 3px; }
-.proposal-popover-old .proposal-popover-text { background: color-mix(in srgb, var(--diff-removed) 12%, var(--vellum)); border-left: 2px solid var(--diff-removed); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--diff-removed) 65%, transparent); }
-.proposal-popover-new .proposal-popover-text { background: color-mix(in srgb, var(--diff-added) 14%, var(--vellum)); border-left: 2px solid var(--diff-added); }
+/* Same author-color-not-semantic-color treatment as .proposal-diff-old/new
+   above, for the same reason - this popover is the full-detail expansion of
+   that same inline editor widget. Old vs new stays distinguishable without
+   color via strikethrough plus a dashed-vs-solid left border. */
+.proposal-popover-old .proposal-popover-text { background: color-mix(in srgb, var(--agent-color) 12%, var(--vellum)); border-left: 2px dashed var(--agent-color); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--agent-color) 65%, transparent); }
+.proposal-popover-new .proposal-popover-text { background: color-mix(in srgb, var(--agent-color) 14%, var(--vellum)); border-left: 2px solid var(--agent-color); }
 
 /* Revise context card: a persistent, dismissible block above the chat
    composer quoting the proposal being revised, rather than text silently
@@ -825,7 +807,14 @@ select option:hover {
   opacity: 0.6;
 }
 
-/* Collapsed chat panel: shrink to a narrow rail, keep the toggle reachable */
+/* Collapsed chat panel: a compact vertical toolbar, not a squashed sliver
+   of whatever panel happened to be open. #chat-content and #review-content
+   are both hidden wholesale (previously only Chat's own children were
+   hidden here, so collapsing while Review was active left its full
+   proposal list crammed into this 40px rail, unreadable and with no way
+   back except re-expanding first - the "irrecoverable" bug flagged in
+   review). .collapsed-rail (below) replaces them with two unmistakable
+   icon buttons. */
 .chat-panel.collapsed {
   width: 40px;
 }
@@ -834,17 +823,63 @@ select option:hover {
   justify-content: center;
 }
 
-.chat-panel.collapsed .chat-header h3,
+.chat-panel.collapsed .panel-tabs,
 .chat-panel.collapsed #chat-provider-select,
-.chat-panel.collapsed .chat-messages,
-.chat-panel.collapsed .chat-input,
-.chat-panel.collapsed #chat-pending-references,
-.chat-panel.collapsed #chat-tool-status {
+.chat-panel.collapsed #clear-chat-btn,
+.chat-panel.collapsed #chat-content,
+.chat-panel.collapsed #review-content {
   display: none;
 }
 
 .chat-panel.collapsed .toggle-chat .icon {
   transform: rotate(180deg);
+}
+
+/* The collapsed-only vertical toolbar: two icon buttons (Chat, Review) that
+   each expand the panel straight to that tab, so there's always an obvious
+   way back in and the choice of which panel you land on isn't lost. Hidden
+   whenever the panel isn't collapsed - .panel-tabs is the equivalent
+   control the rest of the time. */
+.collapsed-rail {
+  display: none;
+}
+.chat-panel.collapsed .collapsed-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .5rem;
+  padding-top: .5rem;
+}
+.collapsed-rail-btn {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  opacity: .55;
+  padding: .3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.collapsed-rail-btn:hover {
+  opacity: .8;
+}
+/* The one cue (besides the icon itself) for "this is the panel you'll land
+   back on" - an ink underline, consistent with .panel-tab.active's own
+   border-bottom treatment, rather than a filled/shadowed "button pressed"
+   state that would read as dashboard chrome. */
+.collapsed-rail-btn.active {
+  opacity: 1;
+  border-bottom: 2px solid var(--presence-you);
+}
+.collapsed-rail-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--review-copper);
 }
 
 /* Projects overview */
@@ -1063,9 +1098,24 @@ select option:hover {
     height: 40vh;
   }
 
+  /* Collapsed is a 36px-tall horizontal strip on mobile (not a narrow
+     vertical rail like desktop - there's no width to spare), so the header
+     and the two-icon toolbar sit side by side in a row instead of stacked
+     in a column neither could fit in 36px of height. */
   .chat-panel.collapsed {
     width: 100%;
     height: 36px;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .chat-panel.collapsed .chat-header {
+    flex: 0 0 auto;
+  }
+
+  .chat-panel.collapsed .collapsed-rail {
+    flex-direction: row;
+    padding-top: 0;
   }
 
   .header-left {

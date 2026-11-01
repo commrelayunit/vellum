@@ -21,16 +21,26 @@ function setButtonLoading(btn, loading) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Toggle chat panel
+    // Toggle chat panel. setChatCollapsed is also used by the collapsed
+    // rail's own Chat/Review icons further below (window-scoped, since
+    // they're wired up alongside setPanel() in the chat/review block) to
+    // force-expand regardless of current state.
     const toggleChatBtn = document.getElementById('toggle-chat');
     const chatPanel = document.getElementById('chat-panel');
-    
-    if (toggleChatBtn && chatPanel) {
-        toggleChatBtn.addEventListener('click', function() {
-            const collapsed = chatPanel.classList.toggle('collapsed');
+
+    function setChatCollapsed(collapsed) {
+        if (!chatPanel) return;
+        chatPanel.classList.toggle('collapsed', collapsed);
+        if (toggleChatBtn) {
             toggleChatBtn.setAttribute('aria-expanded', String(!collapsed));
             toggleChatBtn.setAttribute('aria-label', collapsed ? 'Expand chat' : 'Collapse chat');
             toggleChatBtn.setAttribute('title', collapsed ? 'Expand chat' : 'Collapse chat');
+        }
+    }
+
+    if (toggleChatBtn && chatPanel) {
+        toggleChatBtn.addEventListener('click', function() {
+            setChatCollapsed(!chatPanel.classList.contains('collapsed'));
         });
     }
     
@@ -370,6 +380,44 @@ document.addEventListener('DOMContentLoaded', function() {
         return color;
     }
 
+    // Chat messages and Review proposals only ever carry a provider_color
+    // SNAPSHOT, taken once at creation time (chat_messages/
+    // agent_edit_proposals, see migrations 0011-0014) - so a provider's
+    // color change in Settings previously never reached anything already
+    // sent, which is the mismatch flagged in review. providerColorsById maps
+    // providerId -> that provider's color AS CONFIGURED RIGHT NOW (including
+    // providers deactivated but not deleted); it's fetched on load and
+    // refreshed whenever this tab regains visibility (e.g. after editing a
+    // color in Settings in another tab), so returning to an already-open
+    // writing page repaints every author color live instead of only on a
+    // full reload. A providerId with no entry here (the provider was
+    // deleted) intentionally falls through to the snapshot - that's the one
+    // case a snapshot is actually the right answer, since there's no "current
+    // color" left to ask for.
+    let providerColorsById = null;
+    function loadProviderColors() {
+        return fetch('/api/providers/colors')
+            .then((r) => r.json())
+            .then((data) => {
+                if (!data.success) return;
+                const map = {};
+                data.providers.forEach((p) => { map[p.id] = p.color; });
+                providerColorsById = map;
+            })
+            .catch(() => {});
+    }
+    loadProviderColors();
+
+    // providerId may be null/undefined (no provider on record, or this
+    // message/proposal predates the provider_id column) - always fall back
+    // to the snapshot in that case too.
+    function resolveProviderColorById(providerId, snapshotColor, label) {
+        if (providerId != null && providerColorsById && Object.prototype.hasOwnProperty.call(providerColorsById, providerId)) {
+            return resolveAvatarColor(providerColorsById[providerId], false, label);
+        }
+        return resolveAvatarColor(snapshotColor, false, label);
+    }
+
     // The hex a color-picker swatch should default to when no custom color is
     // set yet: the same color resolveAvatarColor would currently paint, so
     // opening the picker doesn't jarringly default to black.
@@ -473,35 +521,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const reviewSummary = document.getElementById('review-summary');
     const reviewCount = document.getElementById('review-pending-count');
     const chatPanelEl = document.getElementById('chat-panel');
-    const editorWrapperEl = document.querySelector('.editor-container');
+    const collapsedChatBtn = document.getElementById('collapsed-chat-btn');
+    const collapsedReviewBtn = document.getElementById('collapsed-review-btn');
+    const collapsedReviewPending = document.getElementById('collapsed-review-pending');
     let reviewFileId = editorForChat && editorForChat.dataset.fileId;
-    // Review becomes a standalone full-surface view (see .chat-panel.
-    // review-mode in style.css) rather than sharing the narrow chat sidebar
-    // with Chat. Chat remains one click away via the same tab bar, which
-    // stays visible in both modes.
+    // Review is a peer tab sharing the same sidebar slot as Chat (see
+    // #chat-content/#review-content in style.css) - the editor stays
+    // visible and interactive the entire time, in both tabs and regardless
+    // of collapse state.
     function setPanel(panel) {
         const reviewing = panel === 'review';
         if (!reviewContent || !chatContent) return;
         reviewContent.hidden = !reviewing; chatContent.hidden = reviewing;
         reviewTab.setAttribute('aria-selected', String(reviewing)); chatTab.setAttribute('aria-selected', String(!reviewing));
         reviewTab.classList.toggle('active', reviewing); chatTab.classList.toggle('active', !reviewing);
-        if (chatPanelEl) {
-            chatPanelEl.classList.toggle('review-mode', reviewing);
-            // A collapsed-to-a-rail chat panel switching straight to review
-            // mode should expand, not stay pinned at 40px with review-mode's
-            // full-surface layout fighting .collapsed for width.
-            if (reviewing) chatPanelEl.classList.remove('collapsed');
-        }
-        // The editor (file switcher, CodeMirror) sits visually underneath
-        // the now full-surface review overlay - inert keeps it out of the
-        // tab order and hidden from assistive tech while it's covered,
-        // rather than just trusting z-index to make it unreachable.
-        if (editorWrapperEl) {
-            if (reviewing) editorWrapperEl.setAttribute('inert', '');
-            else editorWrapperEl.removeAttribute('inert');
+        if (chatPanelEl) chatPanelEl.classList.toggle('review-mode', reviewing);
+        // Mirrors the active tab onto the collapsed rail's own icons, so
+        // which panel you'll land on is still visible (and correct) even
+        // while collapsed.
+        if (collapsedChatBtn && collapsedReviewBtn) {
+            collapsedChatBtn.classList.toggle('active', !reviewing);
+            collapsedReviewBtn.classList.toggle('active', reviewing);
         }
         if (reviewing) loadReview();
     }
+    // The collapsed rail's two icons are the "obvious expansion path" out of
+    // a collapsed panel: clicking either expands AND switches straight to
+    // that tab, rather than requiring the chevron first and a tab click
+    // after.
+    if (collapsedChatBtn) collapsedChatBtn.addEventListener('click', function() { setChatCollapsed(false); setPanel('chat'); });
+    if (collapsedReviewBtn) collapsedReviewBtn.addEventListener('click', function() { setChatCollapsed(false); setPanel('review'); });
     function proposalText(label, value, extraClass) { const el = document.createElement('pre'); el.className = `proposal-text${extraClass ? ` ${extraClass}` : ''}`; el.textContent = `${label}\n${value}`; return el; }
     function truncateConcise(text) {
         const trimmed = (text || '').trim().replace(/\s+/g, ' ');
@@ -546,6 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data.success) throw new Error(data.message);
             const proposals = data.proposals; const pending = proposals.filter(p => p.state === 'pending').length;
             reviewCount.textContent = pending ? `(${pending})` : '';
+            if (collapsedReviewPending) collapsedReviewPending.textContent = pending ? String(pending) : '';
             reviewSummary.textContent = `${pending} pending · ${proposals.filter(p => p.state === 'accepted').length} accepted · ${proposals.filter(p => p.state === 'rejected').length} rejected · ${proposals.filter(p => p.state === 'stale').length} stale · ${proposals.filter(p => p.state === 'conflict').length} conflict`;
             if (window.__vellumSetProposalMarkers) window.__vellumSetProposalMarkers(proposals);
             // If the proposal currently quoted in the Revise context card is
@@ -560,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
             proposals.forEach(p => {
                 const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
                 const authorLabel = p.provider_label || 'Agent';
-                const identityColor = resolveAvatarColor(p.provider_color, false, authorLabel);
+                const identityColor = resolveProviderColorById(p.provider_id, p.provider_color, authorLabel);
                 const heading = document.createElement('h4');
                 heading.appendChild(buildIdentityChip(authorLabel, identityColor));
                 const loc = locationLabel(p);
@@ -716,6 +766,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function loadHistory() {
+            // Cleared up front, not just appended to: this is also called
+            // again on visibilitychange below so a provider color edited in
+            // Settings, in another tab, repaints already-sent messages as
+            // soon as this tab is looked at again rather than only on a full
+            // reload - re-rendering from scratch is what makes that repaint
+            // actually happen instead of just refreshing providerColorsById
+            // underneath bubbles that already baked the old color into
+            // their DOM.
+            chatMessages.innerHTML = '';
             fetch(`/api/chat/${fileId}/messages`)
                 .then(function(response) { return response.json(); })
                 .then(function(data) {
@@ -725,7 +784,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             addMessage('You', message.content, '', formatTime(message.createdAt), message.selections, null, youColor);
                         } else if (message.role === 'assistant') {
                             const label = message.providerLabel || 'Agent';
-                            addMessage(label, message.content, 'agent-message', formatTime(message.createdAt), null, null, resolveAvatarColor(message.providerColor, false, label));
+                            addMessage(label, message.content, 'agent-message', formatTime(message.createdAt), null, null, resolveProviderColorById(message.providerId, message.providerColor, label));
                         } else {
                             addMessage('Error', message.content, 'error-message', formatTime(message.createdAt));
                         }
@@ -769,7 +828,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const providerId = chatProviderSelect.value;
             const selectedOption = chatProviderSelect.options[chatProviderSelect.selectedIndex];
             const providerLabel = selectedOption.textContent;
-            const providerColor = resolveAvatarColor(selectedOption.dataset.color, false, providerLabel);
+            const providerColor = resolveProviderColorById(providerId, selectedOption.dataset.color, providerLabel);
             let replyContentEl = null;
 
             fetch(`/api/chat/${fileId}/messages`, {
@@ -850,6 +909,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         loadHistory();
+
+        // Settings lives on a separate page, so the most common way a
+        // provider color change actually reaches this already-open writing
+        // page is switching back to this tab after editing it elsewhere -
+        // refresh the live color map and repaint both panels from it
+        // whenever that happens, rather than only on a full reload.
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState !== 'visible') return;
+            loadProviderColors().then(function() {
+                loadHistory();
+                if (reviewContent && !reviewContent.hidden) loadReview();
+            });
+        });
 
         const clearChatBtn = document.getElementById('clear-chat-btn');
         if (clearChatBtn) {

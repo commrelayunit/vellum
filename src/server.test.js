@@ -674,6 +674,41 @@ test('POST /api/providers persists color and POST /api/providers/:id updates it'
   server.close();
 });
 
+test('GET /api/providers/colors reflects a color change immediately, not the color at provider creation', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await login(base);
+  const createRes = await fetch(`${base}/api/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'OpenClaw', baseUrl: 'http://localhost:18789/v1', apiKey: 'secret-token-9999', color: '#c96f48' })
+  });
+  const { provider } = await createRes.json();
+
+  const firstColors = await (await fetch(`${base}/api/providers/colors`, { headers: { Cookie: cookie } })).json();
+  assert.deepEqual(firstColors.providers.find((p) => p.id === provider.id), { id: provider.id, label: 'OpenClaw', color: '#c96f48' });
+
+  await fetch(`${base}/api/providers/${provider.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ label: 'OpenClaw', baseUrl: 'http://localhost:18789/v1', apiKey: '', color: '#5b6eae' })
+  });
+
+  const secondColors = await (await fetch(`${base}/api/providers/colors`, { headers: { Cookie: cookie } })).json();
+  assert.equal(secondColors.providers.find((p) => p.id === provider.id).color, '#5b6eae');
+  server.close();
+});
+
+test('unauthenticated GET /api/providers/colors redirects to /login', async () => {
+  const server = await listen();
+  const { port } = server.address();
+  const res = await fetch(`http://127.0.0.1:${port}/api/providers/colors`, { redirect: 'manual' });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get('location'), /\/login$/);
+  server.close();
+});
+
 test('POST /api/providers rejects a malformed color', async () => {
   const server = await listen();
   const { port } = server.address();
@@ -1301,6 +1336,10 @@ test('POST /api/chat/:fileId/messages persists the user message and the streamed
   assert.equal(messages[1].role, 'assistant');
   assert.equal(messages[1].content, 'Hello');
   assert.equal(messages[1].providerLabel, 'Fake Provider');
+  // providerId is what lets the client resolve this message's author color
+  // live against /api/providers/colors instead of only the providerColor
+  // snapshot above.
+  assert.equal(messages[1].providerId, provider.id);
   server.close();
 });
 
@@ -1712,6 +1751,11 @@ test('POST /api/chat/:fileId/messages on an edit_document tool call creates a pe
   assert.equal(proposals[0].state, 'pending');
   assert.equal(proposals[0].old_text, 'world');
   assert.equal(proposals[0].new_text, 'there');
+  // provider_id is what lets the editor's inline diff/popover resolve this
+  // proposal's author color live against /api/providers/colors instead of
+  // only the provider_color snapshot also asserted below.
+  assert.equal(proposals[0].provider_id, provider.id);
+  assert.equal(proposals[0].provider_color, '#abcdef');
 
   // The persisted file content (what /api/save-file wrote) must be untouched.
   const writingRes = await fetch(`${base}/writing?project=${project.id}&file=${file.id}`, { headers: { Cookie: cookie } });

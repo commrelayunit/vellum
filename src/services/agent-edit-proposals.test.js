@@ -21,6 +21,16 @@ test('a proposal persists and accepts only its still-matching anchored source', 
   assert.equal(made.success, true); assert.equal(service.accept({ fileId: file.id, id: made.proposal.id }).proposal.state, 'accepted');
   const { doc } = manager.acquire(file.id); assert.equal(doc.getText('content').toString(), 'Hello Vellum'); manager.release(file.id); db.close();
 });
+// providerId lets the client resolve this proposal's author color against
+// the provider's CURRENT color (src/client/editor-sync.js's proposalColor())
+// instead of only the provider_color snapshot also stored alongside it.
+test('propose() persists providerId alongside the provider_color snapshot', () => {
+  const { db, file, service } = setup();
+  const made = service.propose({ fileId: file.id, providerId: 7, providerLabel: 'Agent', providerColor: '#5b6eae', oldText: 'world', newText: 'Vellum' });
+  assert.equal(made.proposal.provider_id, 7);
+  assert.equal(made.proposal.provider_color, '#5b6eae');
+  db.close();
+});
 test('a changed anchored source becomes an explicit conflict and remains reviewable', () => {
   const { db, file, manager, service } = setup();
   const made = service.propose({ fileId: file.id, oldText: 'world', newText: 'Vellum' });

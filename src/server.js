@@ -268,6 +268,22 @@ app.get('/settings', requireAuth, (req, res) => {
   res.render('settings', { providers, profile });
 });
 
+// Lets the writing page resolve a provider's CURRENT color live - for Chat
+// history and the editor's pending-proposal diff/popover, both of which
+// otherwise only have the provider_color snapshot taken when that message/
+// proposal was created (see migrations 0011-0014). Deliberately id/label/
+// color only, not providersRepo.list()'s full view model (no baseUrl,
+// maskedKey, etc.) - this is fetched by the writing page just to repaint
+// identity colors, not to manage providers. Includes inactive providers
+// (not just activeInWorkspace) since a provider used in past chat history
+// can later be deactivated without being deleted, and its messages should
+// still pick up its current color rather than falling back to the stale
+// snapshot as if it had been deleted.
+app.get('/api/providers/colors', requireAuth, (req, res) => {
+  const providers = providersRepo.list().map((p) => ({ id: p.id, label: p.label, color: p.color }));
+  res.json({ success: true, providers });
+});
+
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 function isValidColor(value) {
@@ -322,7 +338,9 @@ app.post('/api/providers/:id', requireAuth, (req, res) => {
     apiKey: typeof apiKey === 'string' ? apiKey.trim() : '',
     defaultModel: typeof defaultModel === 'string' && defaultModel.trim() ? defaultModel.trim() : null,
     avatarUrl: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
-    color: typeof color === 'string' && color.trim() ? color.trim() : null,
+    // Quick toggles (notably active-in-workspace) do not send color. Keep
+    // the configured identity color in that case rather than clearing it.
+    color: typeof color === 'string' ? (color.trim() || null) : existing.color,
     activeInWorkspace: typeof activeInWorkspace === 'boolean' ? activeInWorkspace : existing.activeInWorkspace,
     defaultReasoningEffort: typeof defaultReasoningEffort === 'string' ? (defaultReasoningEffort.trim() || null) : existing.defaultReasoningEffort
   });
@@ -511,11 +529,11 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
             return Promise.resolve({ success: false, message: `Unknown tool: ${name}` });
           }
           return Promise.resolve(proposalService.propose({
-            fileId: file.id, providerLabel: provider.label, providerColor: provider.color, oldText: args.old_string, newText: args.new_string
+            fileId: file.id, providerId: provider.id, providerLabel: provider.label, providerColor: provider.color, oldText: args.old_string, newText: args.new_string
           }));
         }
       });
-      chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label, providerColor: provider.color });
+      chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerId: provider.id, providerLabel: provider.label, providerColor: provider.color });
       writeSseEvent(res, { type: 'done' });
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
