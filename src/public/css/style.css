@@ -498,6 +498,26 @@ select option:hover {
   font-weight: normal;
 }
 
+.panel-tabs { display: flex; gap: .25rem; flex: 1; }
+.panel-tab { border: 0; background: transparent; color: var(--ink); padding: .35rem .45rem; cursor: pointer; font: inherit; }
+.panel-tab.active { color: var(--presence-you); border-bottom: 2px solid var(--presence-you); }
+#chat-content, #review-content { min-height: 0; display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+#review-content[hidden] { display: none; }
+.agent-edit-mode { padding: .4rem .65rem; color: var(--ink); border-top: 1px solid var(--soft-rule); font-size: 11px; }
+.agent-edit-mode span { opacity: .7; }
+.review-summary { margin: .6rem; color: var(--ink); }
+.review-list { overflow-y: auto; padding: 0 .6rem .6rem; }
+.proposal-card { border: 1px solid var(--soft-rule); border-left: 3px solid var(--review-copper); padding: .55rem; margin-bottom: .55rem; background: var(--paper); }
+.proposal-card h4 { margin: 0 0 .45rem; text-transform: capitalize; font-size: 12px; }
+.proposal-text { white-space: pre-wrap; max-height: 8rem; overflow: auto; margin: .35rem 0; padding: .35rem; background: var(--vellum); font: 11px/1.4 'Courier New', monospace; }
+.proposal-actions { display: flex; gap: .35rem; margin-top: .45rem; }
+.proposal-outcome { margin: .4rem 0 0; font-size: 11px; }
+.proposal-accepted { border-left-color: var(--presence-you); }
+.proposal-rejected, .proposal-stale, .proposal-conflict { opacity: .78; }
+.proposal-anchor-marker { border: 0; background: var(--review-copper); color: var(--paper); border-radius: 50%; cursor: pointer; font: 11px/1 sans-serif; height: 16px; width: 16px; margin-right: 2px; padding: 0; vertical-align: middle; }
+.proposal-anchor-marker:focus-visible { outline: 2px solid var(--presence-you); outline-offset: 2px; }
+.proposal-anchor-popover { position: fixed; z-index: 20; max-width: 20rem; padding: .45rem; background: var(--ink); color: var(--paper); font: 12px/1.4 'Courier New', monospace; box-shadow: 0 2px 6px #0004; }
+
 .toggle-chat {
   background: none;
   border: none;

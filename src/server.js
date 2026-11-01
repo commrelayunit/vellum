@@ -27,11 +27,13 @@ const { createSecretsService } = require('./crypto/secrets');
 const { createProvidersRepo } = require('./db/providers');
 const { createUserProfileRepo } = require('./db/user-profile');
 const { createChatMessagesRepo } = require('./db/chat-messages');
+const { createAgentEditProposalsRepo } = require('./db/agent-edit-proposals');
 const { createChatCompletionService } = require('./services/chat-completion');
 const { requireAuth, verifyPassword } = require('./auth/middleware');
 const { WebSocketServer } = require('ws');
 const { createSyncDocManager } = require('./services/sync-doc-manager');
 const { createAgentEditSession } = require('./services/agent-editor');
+const { createProposalService } = require('./services/agent-edit-proposals');
 const { handleSyncConnection } = require('./services/sync-connection');
 
 const db = createConnection(config.dbPath);
@@ -42,10 +44,15 @@ const secrets = createSecretsService(config.encryptionKey);
 const providersRepo = createProvidersRepo(db, secrets);
 const userProfileRepo = createUserProfileRepo(db);
 const chatMessagesRepo = createChatMessagesRepo(db);
+const agentEditProposalsRepo = createAgentEditProposalsRepo(db);
 const syncDocManager = createSyncDocManager({ filesRepo });
+const proposalService = createProposalService({ docManager: syncDocManager, proposalsRepo: agentEditProposalsRepo });
 
 const app = express();
 app.locals.chatCompletionService = createChatCompletionService();
+// Exposed for route-level integration tests; routes still call the closed-over
+// service so production behavior has no mutable dependency injection path.
+app.locals.proposalService = proposalService;
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -158,7 +165,10 @@ app.post('/api/projects/:id/delete', requireAuth, (req, res) => {
   // Files must go first: the FK (files.project_id REFERENCES projects(id))
   // is enforced (PRAGMA foreign_keys = ON), so deleting the project first
   // would fail while any of its files still exist.
-  filesRepo.listByProjectId(id).forEach((file) => chatMessagesRepo.deleteForFile(file.id));
+  filesRepo.listByProjectId(id).forEach((file) => {
+    chatMessagesRepo.deleteForFile(file.id);
+    agentEditProposalsRepo.deleteForFile(file.id);
+  });
   filesRepo.deleteByProjectId(id);
   projectsRepo.delete(id);
   res.json({ success: true });
@@ -205,6 +215,7 @@ app.post('/api/files/:id/delete', requireAuth, (req, res) => {
     return res.status(400).json({ success: false, message: 'A project must have at least one file' });
   }
   chatMessagesRepo.deleteForFile(id);
+  agentEditProposalsRepo.deleteForFile(id);
   filesRepo.delete(id);
   res.json({ success: true });
 });
@@ -354,6 +365,22 @@ app.get('/api/chat/:fileId/messages', requireAuth, (req, res) => {
   res.json({ success: true, messages: chatMessagesRepo.listForFile(fileId) });
 });
 
+app.get('/api/files/:fileId/proposals', requireAuth, (req, res) => {
+  const fileId = parseInt(req.params.fileId, 10);
+  if (!filesRepo.getById(fileId)) return res.status(404).json({ success: false, message: 'File not found' });
+  res.json({ success: true, proposals: agentEditProposalsRepo.listForFile(fileId) });
+});
+
+app.post('/api/files/:fileId/proposals/:proposalId/accept', requireAuth, (req, res) => {
+  const result = proposalService.accept({ fileId: parseInt(req.params.fileId, 10), id: parseInt(req.params.proposalId, 10) });
+  res.status(result.status || 200).json(result);
+});
+
+app.post('/api/files/:fileId/proposals/:proposalId/reject', requireAuth, (req, res) => {
+  const result = proposalService.reject({ fileId: parseInt(req.params.fileId, 10), id: parseInt(req.params.proposalId, 10) });
+  res.status(result.status || 200).json(result);
+});
+
 app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   // Everything in this block runs before any SSE headers are set, so on
   // failure we can still respond with a normal JSON error. This section is
@@ -366,6 +393,7 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
   let trimmedMessage;
   let history;
   let validSelections;
+  let editMode;
   try {
     const fileId = parseInt(req.params.fileId, 10);
     file = filesRepo.getById(fileId);
@@ -373,6 +401,9 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'File not found' });
     }
     const { providerId, message, selections } = req.body;
+    // Reviewable proposals are the default. Direct editing remains available
+    // only via this explicit opt-in value, never as a silent fallback.
+    editMode = req.body.editMode === 'live' ? 'live' : 'proposal';
     if (typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
@@ -466,7 +497,10 @@ app.post('/api/chat/:fileId/messages', requireAuth, async (req, res) => {
           if (name !== 'edit_document') {
             return Promise.resolve({ success: false, message: `Unknown tool: ${name}` });
           }
-          return agentSession.applyEdit(args.old_string, args.new_string);
+          if (editMode === 'live') return agentSession.applyEdit(args.old_string, args.new_string);
+          return Promise.resolve(proposalService.propose({
+            fileId: file.id, providerLabel: provider.label, oldText: args.old_string, newText: args.new_string
+          }));
         }
       });
       chatMessagesRepo.create({ fileId: file.id, role: 'assistant', content: fullText, providerLabel: provider.label });

@@ -5,6 +5,13 @@
 
 Vellum is a private, self-hostable writing workspace for humans and agents.
 
+## Markdown preview
+
+Preview uses a bundled Markdown-It renderer with raw HTML disabled. It supports
+CommonMark headings, lists, emphasis, links and fenced code plus GFM tables,
+strikethrough and task lists, and KaTeX inline (`$x$`) / display (`$$x$$`)
+math. Source HTML is intentionally shown as text, never executed.
+
 ## Docs
 
 - [Current implementation status and remaining work](TODOS.md)

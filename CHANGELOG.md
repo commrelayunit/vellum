@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 History prior to 1.0.0 was not tracked in this file.
 
+## [1.1.3] - 2026-11-01
+
+### Added
+
+- Durable, reviewable agent edit proposals with anchored accept/reject history,
+  explicit conflict outcomes, and a Review panel alongside file chat.
+
 ## [1.0.1] - 2026-08-24
 
 ### Fixed

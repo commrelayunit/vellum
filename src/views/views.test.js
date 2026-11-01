@@ -93,6 +93,10 @@ test('writing.ejs renders file content with no stray whitespace', async () => {
   });
   assert.match(html, /<div id="markdown-editor" class="editor-textarea" data-file-id="1" data-profile-label="Test Person" data-profile-cursor-color="" data-show-line-numbers="false"><\/div>/);
   assert.match(html, /<script id="editor-initial-content" type="application\/json">"# Hello"<\/script>/);
+  assert.match(html, /id="review-tab"/);
+  assert.match(html, /id="review-content"/);
+  assert.match(html, /preview-renderer\.js/);
+  assert.match(html, /preview-renderer\.css/);
 });
 
 test('writing.ejs passes the profile cursorColor through to the editor mount point', async () => {

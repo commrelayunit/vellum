@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 // Convert markdown to HTML and show preview, hide editor
                 const markdownContent = window.__vellumEditorView ? window.__vellumEditorView.state.doc.toString() : '';
-                const htmlContent = convertMarkdownToHtml(markdownContent);
+                const htmlContent = window.__vellumRenderMarkdown ? window.__vellumRenderMarkdown(markdownContent) : '<p>Preview renderer is unavailable.</p>';
                 previewContent.innerHTML = htmlContent;
                 editorContainer.style.display = 'none';
                 previewContent.style.display = 'block';
@@ -329,6 +329,69 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatProviderSelect = document.getElementById('chat-provider-select');
     const editorForChat = document.getElementById('markdown-editor');
 
+    // Review is a peer tab, not a modal or a second chat. Proposal state is
+    // read from the durable API each time it is opened so reloads and other
+    // collaborators are reflected without trusting browser memory.
+    const reviewTab = document.getElementById('review-tab');
+    const chatTab = document.getElementById('chat-tab');
+    const reviewContent = document.getElementById('review-content');
+    const chatContent = document.getElementById('chat-content');
+    const reviewList = document.getElementById('review-list');
+    const reviewSummary = document.getElementById('review-summary');
+    const reviewCount = document.getElementById('review-pending-count');
+    let reviewFileId = editorForChat && editorForChat.dataset.fileId;
+    function setPanel(panel) {
+        const reviewing = panel === 'review';
+        if (!reviewContent || !chatContent) return;
+        reviewContent.hidden = !reviewing; chatContent.hidden = reviewing;
+        reviewTab.setAttribute('aria-selected', String(reviewing)); chatTab.setAttribute('aria-selected', String(!reviewing));
+        reviewTab.classList.toggle('active', reviewing); chatTab.classList.toggle('active', !reviewing);
+        if (reviewing) loadReview();
+    }
+    function proposalText(label, value) { const el = document.createElement('pre'); el.className = 'proposal-text'; el.textContent = `${label}\n${value}`; return el; }
+    function loadReview() {
+        if (!reviewFileId || !reviewList) return;
+        fetch(`/api/files/${reviewFileId}/proposals`).then(async r => {
+            const data = await r.json();
+            if (!r.ok || !data.success) throw new Error(data.message || `Review request failed (${r.status})`);
+            return data;
+        }).then(data => {
+            if (!data.success) throw new Error(data.message);
+            const proposals = data.proposals; const pending = proposals.filter(p => p.state === 'pending').length;
+            reviewCount.textContent = pending ? `(${pending})` : '';
+            reviewSummary.textContent = `${pending} pending · ${proposals.filter(p => p.state === 'accepted').length} accepted · ${proposals.filter(p => p.state === 'rejected').length} rejected · ${proposals.filter(p => p.state === 'stale').length} stale · ${proposals.filter(p => p.state === 'conflict').length} conflict`;
+            if (window.__vellumSetProposalMarkers) window.__vellumSetProposalMarkers(proposals);
+            reviewList.innerHTML = '';
+            proposals.forEach(p => {
+                const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
+                const heading = document.createElement('h4'); heading.textContent = `${p.state} · ${p.provider_label || 'Agent'}`; card.appendChild(heading);
+                card.appendChild(proposalText('Original', p.old_text)); card.appendChild(proposalText('Proposed', p.new_text));
+                if (p.outcome_message) { const outcome = document.createElement('p'); outcome.className = 'proposal-outcome'; outcome.textContent = p.outcome_message; card.appendChild(outcome); }
+                if (p.state === 'pending') {
+                    const actions = document.createElement('div'); actions.className = 'proposal-actions';
+                    ['Accept', 'Reject'].forEach(action => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = action; b.addEventListener('click', async () => {
+                        b.disabled = true;
+                        try {
+                            const response = await fetch(`/api/files/${reviewFileId}/proposals/${p.id}/${action.toLowerCase()}`, { method: 'POST' });
+                            const result = await response.json();
+                            if (!response.ok || !result.success) {
+                                reviewSummary.textContent = result.message || `${action} failed (${response.status}).`;
+                            }
+                        } catch { reviewSummary.textContent = `${action} request failed. Your proposal history was not reloaded.`; }
+                        finally { loadReview(); }
+                    }); actions.appendChild(b); });
+                    const revise = document.createElement('button'); revise.className = 'btn'; revise.textContent = 'Revise'; revise.addEventListener('click', () => {
+                        setPanel('chat'); const input = document.getElementById('chat-input');
+                        input.value = `> Proposed edit\n> Original: ${p.old_text}\n> Proposed: ${p.new_text}\n\nPlease revise this proposal: `; input.focus();
+                    }); actions.appendChild(revise); card.appendChild(actions);
+                }
+                reviewList.appendChild(card);
+            });
+        }).catch((error) => { reviewSummary.textContent = error.message || 'Could not load review proposals.'; });
+    }
+    if (reviewTab && chatTab) { reviewTab.addEventListener('click', () => setPanel('review')); chatTab.addEventListener('click', () => setPanel('chat')); }
+    if (reviewFileId) loadReview();
+
     if (chatInput && sendChatBtn && chatMessages && editorForChat) {
         const fileId = editorForChat.dataset.fileId;
         const pendingReferencesEl = document.getElementById('chat-pending-references');
@@ -473,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/api/chat/${fileId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ providerId, message, selections: selectionsForSend })
+                body: JSON.stringify({ providerId, message, selections: selectionsForSend, editMode: document.getElementById('live-edit-opt-in').checked ? 'live' : 'proposal' })
             })
             .then(function(response) {
                 if (!isSseResponse(response)) {
@@ -534,6 +597,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 setButtonLoading(sendChatBtn, false);
                 hideToolStatus();
                 chatInput.focus();
+                if (reviewContent && !reviewContent.hidden) loadReview();
             });
         }
 
@@ -566,36 +630,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
             });
         }
-    }
-
-    // Simple markdown to HTML converter
-    function escapeHtml(text) {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function convertMarkdownToHtml(markdown) {
-        // Simple conversion for demo purposes
-        let html = escapeHtml(markdown)
-            .replace(/^# (.*)$/gm, '<h1>$1</h1>')
-            .replace(/^## (.*)$/gm, '<h2>$1</h2>')
-            .replace(/^### (.*)$/gm, '<h3>$1</h3>')
-            .replace(/^\*\*([^*]+)\*\*$/gm, '<strong>$1</strong>')
-            .replace(/^\*([^*]+)\*$/gm, '<em>$1</em>')
-            .replace(/^\- (.*)$/gm, '<li>$1</li>')
-            .replace(/\n\n/g, '</p><p>')
-            .replace(/\n/g, '<br>');
-        
-        // Wrap in paragraph tags
-        if (!html.startsWith('<')) {
-            html = `<p>${html}</p>`;
-        }
-
-        return html;
     }
 
     // Projects overview: relative "updated" times
