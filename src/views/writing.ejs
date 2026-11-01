@@ -75,7 +75,7 @@
         <% if (activeProviders.length > 0) { %>
             <select id="chat-provider-select" aria-label="Choose provider">
                 <% activeProviders.forEach(function(provider) { %>
-                    <option value="<%= provider.id %>"><%= provider.label %></option>
+                    <option value="<%= provider.id %>" data-color="<%= provider.color || '' %>"><%= provider.label %></option>
                 <% }); %>
             </select>
         <% } %>
@@ -115,6 +115,7 @@
     </div>
     </div>
     <div id="review-content" role="tabpanel" hidden aria-live="polite">
+        <p class="review-file-context" id="review-file-context">Reviewing <%= file.title || file.path %></p>
         <p class="review-summary" id="review-summary">Loading proposals…</p>
         <div id="review-list" class="review-list"></div>
     </div>

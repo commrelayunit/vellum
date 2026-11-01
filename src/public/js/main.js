@@ -322,6 +322,139 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Shared identity-color resolution + avatar rendering, used by the
+    // presence-stack avatars, Settings page provider avatars, chat message
+    // authors, and the Review tab's proposal cards - one place decides "what
+    // color is this participant", so the same provider/profile reads the
+    // same color everywhere it shows up. Hoisted above the chat/review code
+    // below (which now also calls these) rather than left where it
+    // originally sat, further down, serving only the Settings page's own
+    // provider avatars.
+    const KNOWN_PROVIDER_ICONS = [
+        { pattern: /openai|gpt/i, slug: 'openai' },
+        { pattern: /anthropic|claude/i, slug: 'anthropic' },
+        { pattern: /google|gemini/i, slug: 'googlegemini' },
+        { pattern: /mistral/i, slug: 'mistralai' },
+        // ollama must be checked before meta|llama - "ollama" contains the
+        // substring "llama", so the meta pattern would otherwise always win.
+        { pattern: /ollama/i, slug: 'ollama' },
+        { pattern: /meta|llama/i, slug: 'meta' }
+    ];
+
+    const AVATAR_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
+    // Real hex mirrors of the --presence-* CSS custom properties (style.css).
+    // <input type="color"> can't resolve a var() reference, so a color
+    // picker's default swatch needs an actual hex value to show.
+    const HEX_PRESENCE_COLORS = ['#2F6F64', '#C96F48', '#5B6EAE'];
+
+    function hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = (hash * 31 + str.charCodeAt(i)) | 0;
+        }
+        return Math.abs(hash);
+    }
+
+    // A custom color (the user's chosen cursor color, or a provider's chosen
+    // color) always wins. Otherwise the user's own profile uses
+    // AVATAR_COLORS[0] (--presence-you) so it visually matches the "this is
+    // you" cursor-line tint, and everyone else falls back to a hash-derived
+    // color from the same 3-color palette - the one rule every avatar,
+    // chat-message author, and proposal author color resolves through.
+    function resolveAvatarColor(customColor, isOwnProfile, label) {
+        const color = customColor
+            ? customColor
+            : isOwnProfile
+                ? AVATAR_COLORS[0]
+                : AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
+        return color;
+    }
+
+    // The hex a color-picker swatch should default to when no custom color is
+    // set yet: the same color resolveAvatarColor would currently paint, so
+    // opening the picker doesn't jarringly default to black.
+    function defaultColorFor(label, isOwnProfile) {
+        return isOwnProfile
+            ? HEX_PRESENCE_COLORS[0]
+            : HEX_PRESENCE_COLORS[hashString(label) % HEX_PRESENCE_COLORS.length];
+    }
+
+    function initialsFor(label) {
+        // Punctuation-only "words" (e.g. a spaced en-dash in "OpenClaw – home")
+        // shouldn't count as a word on their own, and shouldn't contribute a
+        // non-alphanumeric character to the initials.
+        const words = label.trim().split(/\s+/).filter(function(w) { return /[a-z0-9]/i.test(w); });
+        if (words.length === 0) return '?';
+        if (words.length === 1) {
+            const alnum = words[0].replace(/[^a-z0-9]/gi, '');
+            return (alnum.slice(0, 2) || '?').toUpperCase();
+        }
+        const firstChar = words[0].match(/[a-z0-9]/i)[0];
+        const secondChar = words[1].match(/[a-z0-9]/i)[0];
+        return (firstChar + secondChar).toUpperCase();
+    }
+
+    function renderInitialsFallback(target, label) {
+        const isOwnProfile = target.dataset.skipBrandLookup === 'true';
+        const customColor = target.dataset.color;
+        const color = resolveAvatarColor(customColor, isOwnProfile, label);
+        target.style.backgroundColor = color;
+        target.textContent = initialsFor(label);
+    }
+
+    // The small colored-circle-plus-initials identity chip reused next to
+    // chat message authors and Review proposal cards - the same visual
+    // identity treatment as the presence-stack/Settings avatars above, just
+    // smaller and inline with text rather than a standalone element.
+    // Decorative: the author's name is rendered as real text right next to
+    // it, so assistive tech doesn't need this element announced too.
+    function buildIdentityChip(label, color) {
+        const chip = document.createElement('span');
+        chip.className = 'identity-chip';
+        chip.style.backgroundColor = color;
+        chip.textContent = initialsFor(label);
+        chip.setAttribute('aria-hidden', 'true');
+        return chip;
+    }
+
+    function resolveProviderAvatar(target) {
+        const customUrl = target.dataset.avatarUrl;
+        const label = target.dataset.label || '';
+        const skipBrandLookup = target.dataset.skipBrandLookup === 'true';
+
+        function withImageFallback(src) {
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = label;
+            img.onerror = function() {
+                // The image (custom URL, or cdn.simpleicons.org - which may be
+                // unreachable from a self-hosted/Tailscale-only deployment)
+                // failed to load. Drop it and fall back to initials+color
+                // instead of leaving a blank circle.
+                img.remove();
+                renderInitialsFallback(target, label);
+            };
+            target.appendChild(img);
+        }
+
+        if (customUrl) {
+            withImageFallback(customUrl);
+            return;
+        }
+
+        if (!skipBrandLookup) {
+            const known = KNOWN_PROVIDER_ICONS.find(function(entry) { return entry.pattern.test(label); });
+            if (known) {
+                withImageFallback(`https://cdn.simpleicons.org/${known.slug}`);
+                return;
+            }
+        }
+
+        renderInitialsFallback(target, label);
+    }
+
+    document.querySelectorAll('[data-avatar-target]').forEach(resolveProviderAvatar);
+
     // Chat functionality: real streaming completions, per-file history
     const chatInput = document.getElementById('chat-input');
     const sendChatBtn = document.getElementById('send-chat-btn');
@@ -339,16 +472,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const reviewList = document.getElementById('review-list');
     const reviewSummary = document.getElementById('review-summary');
     const reviewCount = document.getElementById('review-pending-count');
+    const chatPanelEl = document.getElementById('chat-panel');
+    const editorWrapperEl = document.querySelector('.editor-container');
     let reviewFileId = editorForChat && editorForChat.dataset.fileId;
+    // Review becomes a standalone full-surface view (see .chat-panel.
+    // review-mode in style.css) rather than sharing the narrow chat sidebar
+    // with Chat. Chat remains one click away via the same tab bar, which
+    // stays visible in both modes.
     function setPanel(panel) {
         const reviewing = panel === 'review';
         if (!reviewContent || !chatContent) return;
         reviewContent.hidden = !reviewing; chatContent.hidden = reviewing;
         reviewTab.setAttribute('aria-selected', String(reviewing)); chatTab.setAttribute('aria-selected', String(!reviewing));
         reviewTab.classList.toggle('active', reviewing); chatTab.classList.toggle('active', !reviewing);
+        if (chatPanelEl) {
+            chatPanelEl.classList.toggle('review-mode', reviewing);
+            // A collapsed-to-a-rail chat panel switching straight to review
+            // mode should expand, not stay pinned at 40px with review-mode's
+            // full-surface layout fighting .collapsed for width.
+            if (reviewing) chatPanelEl.classList.remove('collapsed');
+        }
+        // The editor (file switcher, CodeMirror) sits visually underneath
+        // the now full-surface review overlay - inert keeps it out of the
+        // tab order and hidden from assistive tech while it's covered,
+        // rather than just trusting z-index to make it unreachable.
+        if (editorWrapperEl) {
+            if (reviewing) editorWrapperEl.setAttribute('inert', '');
+            else editorWrapperEl.removeAttribute('inert');
+        }
         if (reviewing) loadReview();
     }
-    function proposalText(label, value) { const el = document.createElement('pre'); el.className = 'proposal-text'; el.textContent = `${label}\n${value}`; return el; }
+    function proposalText(label, value, extraClass) { const el = document.createElement('pre'); el.className = `proposal-text${extraClass ? ` ${extraClass}` : ''}`; el.textContent = `${label}\n${value}`; return el; }
     function truncateConcise(text) {
         const trimmed = (text || '').trim().replace(/\s+/g, ' ');
         return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
@@ -405,14 +559,22 @@ document.addEventListener('DOMContentLoaded', function() {
             reviewList.innerHTML = '';
             proposals.forEach(p => {
                 const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
+                const authorLabel = p.provider_label || 'Agent';
+                const identityColor = resolveAvatarColor(p.provider_color, false, authorLabel);
                 const heading = document.createElement('h4');
+                heading.appendChild(buildIdentityChip(authorLabel, identityColor));
                 const loc = locationLabel(p);
-                heading.textContent = `${p.state} · ${p.provider_label || 'Agent'}${loc ? ` · ${loc}` : ''}`;
+                const headingText = document.createElement('span');
+                headingText.textContent = `${p.state} · ${authorLabel}${loc ? ` · ${loc}` : ''}`;
+                heading.appendChild(headingText);
                 card.appendChild(heading);
                 const summary = document.createElement('p'); summary.className = 'proposal-summary';
                 summary.textContent = `"${truncateConcise(p.old_text)}" → "${truncateConcise(p.new_text)}"`;
                 card.appendChild(summary);
-                card.appendChild(proposalText('Original', p.old_text)); card.appendChild(proposalText('Proposed', p.new_text));
+                const diffPair = document.createElement('div'); diffPair.className = 'proposal-diff-pair';
+                diffPair.appendChild(proposalText('Original', p.old_text, 'proposal-text-old'));
+                diffPair.appendChild(proposalText('Proposed', p.new_text, 'proposal-text-new'));
+                card.appendChild(diffPair);
                 if (p.outcome_message) { const outcome = document.createElement('p'); outcome.className = 'proposal-outcome'; outcome.textContent = p.outcome_message; card.appendChild(outcome); }
                 if (p.state === 'pending') {
                     const actions = document.createElement('div'); actions.className = 'proposal-actions';
@@ -441,6 +603,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (chatInput && sendChatBtn && chatMessages && editorForChat) {
         const fileId = editorForChat.dataset.fileId;
+        // Same color the presence-stack "you" avatar and live cursor use -
+        // resolved once since it never changes mid-session.
+        const youColor = resolveAvatarColor(editorForChat.dataset.profileCursorColor, true, 'You');
         const pendingReferencesEl = document.getElementById('chat-pending-references');
         let pendingReferences = [];
 
@@ -493,13 +658,25 @@ document.addEventListener('DOMContentLoaded', function() {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
-        function addMessage(author, content, className, timeString, selections, reviseContext) {
+        // identityColor is a resolved CSS color (already run through
+        // resolveAvatarColor by the caller, which knows whether this is the
+        // user's own profile or a provider), not a raw custom color -
+        // keeping that resolution out of addMessage lets 'Error' messages
+        // (not a participant - skip the chip/rail entirely) stay a simple
+        // caller-side check.
+        function addMessage(author, content, className, timeString, selections, reviseContext, identityColor) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${className || ''}`;
 
             const authorDiv = document.createElement('div');
             authorDiv.className = 'message-author';
-            authorDiv.textContent = author;
+            if (author !== 'Error' && identityColor) {
+                authorDiv.appendChild(buildIdentityChip(author, identityColor));
+                messageDiv.style.setProperty('--identity-color', identityColor);
+            }
+            const authorNameEl = document.createElement('span');
+            authorNameEl.textContent = author;
+            authorDiv.appendChild(authorNameEl);
             messageDiv.appendChild(authorDiv);
 
             if (reviseContext) {
@@ -545,9 +722,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!data.success) return;
                     data.messages.forEach(function(message) {
                         if (message.role === 'user') {
-                            addMessage('You', message.content, '', formatTime(message.createdAt), message.selections);
+                            addMessage('You', message.content, '', formatTime(message.createdAt), message.selections, null, youColor);
                         } else if (message.role === 'assistant') {
-                            addMessage(message.providerLabel || 'Agent', message.content, 'agent-message', formatTime(message.createdAt));
+                            const label = message.providerLabel || 'Agent';
+                            addMessage(label, message.content, 'agent-message', formatTime(message.createdAt), null, null, resolveAvatarColor(message.providerColor, false, label));
                         } else {
                             addMessage('Error', message.content, 'error-message', formatTime(message.createdAt));
                         }
@@ -577,7 +755,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const selectionsForSend = pendingReferences.slice();
             const reviseOfForSend = activeReviseContext ? { ...activeReviseContext } : null;
-            addMessage('You', message, '', undefined, selectionsForSend, reviseOfForSend);
+            addMessage('You', message, '', undefined, selectionsForSend, reviseOfForSend, youColor);
             chatInput.value = '';
             chatInput.disabled = true;
             setButtonLoading(sendChatBtn, true);
@@ -589,7 +767,9 @@ document.addEventListener('DOMContentLoaded', function() {
             clearReviseContext();
 
             const providerId = chatProviderSelect.value;
-            const providerLabel = chatProviderSelect.options[chatProviderSelect.selectedIndex].textContent;
+            const selectedOption = chatProviderSelect.options[chatProviderSelect.selectedIndex];
+            const providerLabel = selectedOption.textContent;
+            const providerColor = resolveAvatarColor(selectedOption.dataset.color, false, providerLabel);
             let replyContentEl = null;
 
             fetch(`/api/chat/${fileId}/messages`, {
@@ -629,7 +809,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const payload = JSON.parse(eventText.slice(6));
                             if (payload.type === 'delta') {
                                 if (!replyContentEl) {
-                                    replyContentEl = addMessage(providerLabel, '', 'agent-message');
+                                    replyContentEl = addMessage(providerLabel, '', 'agent-message', undefined, null, null, providerColor);
                                 }
                                 replyContentEl.textContent += payload.text;
                                 chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -950,114 +1130,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-
-    // Settings page: resolve each provider's avatar (custom URL > known-brand
-    // icon via Simple Icons > initials+color fallback, same visual pattern as
-    // the collaborator presence avatars).
-    const KNOWN_PROVIDER_ICONS = [
-        { pattern: /openai|gpt/i, slug: 'openai' },
-        { pattern: /anthropic|claude/i, slug: 'anthropic' },
-        { pattern: /google|gemini/i, slug: 'googlegemini' },
-        { pattern: /mistral/i, slug: 'mistralai' },
-        // ollama must be checked before meta|llama - "ollama" contains the
-        // substring "llama", so the meta pattern would otherwise always win.
-        { pattern: /ollama/i, slug: 'ollama' },
-        { pattern: /meta|llama/i, slug: 'meta' }
-    ];
-
-    const AVATAR_COLORS = ['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'];
-    // Real hex mirrors of the --presence-* CSS custom properties (style.css).
-    // <input type="color"> can't resolve a var() reference, so a color
-    // picker's default swatch needs an actual hex value to show.
-    const HEX_PRESENCE_COLORS = ['#2F6F64', '#C96F48', '#5B6EAE'];
-
-    function hashString(str) {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            hash = (hash * 31 + str.charCodeAt(i)) | 0;
-        }
-        return Math.abs(hash);
-    }
-
-    // The hex a color-picker swatch should default to when no custom color is
-    // set yet: the same color renderInitialsFallback would currently paint,
-    // so opening the picker doesn't jarringly default to black.
-    function defaultColorFor(label, isOwnProfile) {
-        return isOwnProfile
-            ? HEX_PRESENCE_COLORS[0]
-            : HEX_PRESENCE_COLORS[hashString(label) % HEX_PRESENCE_COLORS.length];
-    }
-
-    function initialsFor(label) {
-        // Punctuation-only "words" (e.g. a spaced en-dash in "OpenClaw – home")
-        // shouldn't count as a word on their own, and shouldn't contribute a
-        // non-alphanumeric character to the initials.
-        const words = label.trim().split(/\s+/).filter(function(w) { return /[a-z0-9]/i.test(w); });
-        if (words.length === 0) return '?';
-        if (words.length === 1) {
-            const alnum = words[0].replace(/[^a-z0-9]/gi, '');
-            return (alnum.slice(0, 2) || '?').toUpperCase();
-        }
-        const firstChar = words[0].match(/[a-z0-9]/i)[0];
-        const secondChar = words[1].match(/[a-z0-9]/i)[0];
-        return (firstChar + secondChar).toUpperCase();
-    }
-
-    function renderInitialsFallback(target, label) {
-        // A custom color (the user's chosen cursor color, or a provider's
-        // chosen color) always wins. Otherwise the user's own profile avatar
-        // (data-skip-brand-lookup="true") uses AVATAR_COLORS[0]
-        // (--presence-you) so it visually matches the "this is you"
-        // cursor-line tint, and everyone else falls back to a hash-derived
-        // color from the same 3-color palette.
-        const isOwnProfile = target.dataset.skipBrandLookup === 'true';
-        const customColor = target.dataset.color;
-        const color = customColor
-            ? customColor
-            : isOwnProfile
-                ? AVATAR_COLORS[0]
-                : AVATAR_COLORS[hashString(label) % AVATAR_COLORS.length];
-        target.style.backgroundColor = color;
-        target.textContent = initialsFor(label);
-    }
-
-    function resolveProviderAvatar(target) {
-        const customUrl = target.dataset.avatarUrl;
-        const label = target.dataset.label || '';
-        const skipBrandLookup = target.dataset.skipBrandLookup === 'true';
-
-        function withImageFallback(src) {
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = label;
-            img.onerror = function() {
-                // The image (custom URL, or cdn.simpleicons.org - which may be
-                // unreachable from a self-hosted/Tailscale-only deployment)
-                // failed to load. Drop it and fall back to initials+color
-                // instead of leaving a blank circle.
-                img.remove();
-                renderInitialsFallback(target, label);
-            };
-            target.appendChild(img);
-        }
-
-        if (customUrl) {
-            withImageFallback(customUrl);
-            return;
-        }
-
-        if (!skipBrandLookup) {
-            const known = KNOWN_PROVIDER_ICONS.find(function(entry) { return entry.pattern.test(label); });
-            if (known) {
-                withImageFallback(`https://cdn.simpleicons.org/${known.slug}`);
-                return;
-            }
-        }
-
-        renderInitialsFallback(target, label);
-    }
-
-    document.querySelectorAll('[data-avatar-target]').forEach(resolveProviderAvatar);
 
     // Settings page: add/edit/delete provider forms
     const providersList = document.getElementById('providers-list');

@@ -208,7 +208,7 @@ test('writing.ejs renders a provider selector when providers are active', async 
     activeProviders: [{ id: 7, label: 'Active Agent', avatarUrl: null }]
   });
   assert.match(html, /id="chat-provider-select"/);
-  assert.match(html, /<option value="7">Active Agent<\/option>/);
+  assert.match(html, /<option value="7" data-color="">Active Agent<\/option>/);
   assert.doesNotMatch(html, /id="chat-input"[^>]*disabled/);
 });
 
