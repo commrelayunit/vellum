@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 History prior to 1.0.0 was not tracked in this file.
 
+## [1.1.7] - 2026-11-02
+
+### Fixed
+
+- Historical Chat messages and edit proposals created before provider IDs were
+  stored now pick up the current configured provider label, avatar, and color
+  when that label has exactly one match. Ambiguous or missing labels continue
+  to use their saved identity snapshot.
+- Review's Pending and Accepted disclosure controls now use a compact,
+  ink-on-paper marker and restrained typography while preserving their
+  independent expanded states and keyboard access.
+- Clicking an inline pending-edit passage now pins its detail tooltip open;
+  the keyboard-accessible close control returns it to ordinary hover/focus
+  behavior.
+
 ## [1.1.6] - 2026-11-02
 
 ### Fixed

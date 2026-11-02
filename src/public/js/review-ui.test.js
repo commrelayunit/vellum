@@ -26,6 +26,14 @@ test('review UI groups Pending and Accepted independently, with Pending expanded
   assert.match(source, /else if \(p\.state === 'accepted'\) acceptedSection\.body\.appendChild\(card\)/);
 });
 
+test('review disclosure styling remains compact and non-generic', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+  assert.match(css, /\.review-section-toggle \{[^}]*display: inline-flex[^}]*font: 12px\/1\.3 inherit[^}]*\}/);
+  assert.match(css, /\.review-section-toggle::before \{[^}]*border-radius: 50%[^}]*\}/);
+  assert.doesNotMatch(css, /\.review-section-toggle \{[^}]*width: 100%/);
+  assert.doesNotMatch(css, /\.review-section-toggle \{[^}]*border-bottom/);
+});
+
 test('review proposal identity chips use the live provider avatar with initials fallback', () => {
   assert.match(source, /buildIdentityChip\(authorLabel, identity\.color, identity\.avatarUrl\)/);
   assert.match(source, /image\.onerror = function\(\) \{ image\.remove\(\); chip\.textContent = initialsFor\(label\); \}/);

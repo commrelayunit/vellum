@@ -396,25 +396,44 @@ document.addEventListener('DOMContentLoaded', function() {
     // color" left to ask for.
     let providerColorsById = null;
     let providerIdentitiesById = null;
+    let providerIdentitiesByLabel = null;
     let profileIdentity = null;
+
+    // Historical messages and proposals created before provider_id was
+    // recorded only have a label. Resolve those records only when today's
+    // configured providers contain exactly one case-sensitive label match;
+    // a missing or duplicate label must retain its saved snapshot instead
+    // of silently attributing an old record to the wrong participant.
+    function uniqueProviderByLabel(identitiesByLabel, label) {
+        if (!label || !identitiesByLabel) return null;
+        const matches = identitiesByLabel[label];
+        return Array.isArray(matches) && matches.length === 1 ? matches[0] : null;
+    }
     function loadProviderColors() {
         return fetch('/api/providers/colors')
             .then((r) => r.json())
             .then((data) => {
                 if (!data.success) {
-                    providerColorsById = {}; providerIdentitiesById = {};
+                    providerColorsById = {}; providerIdentitiesById = {}; providerIdentitiesByLabel = {};
                     return;
                 }
                 const map = {};
                 const identities = {};
-                data.providers.forEach((p) => { map[p.id] = p.color; identities[p.id] = p; });
+                const identitiesByLabel = {};
+                data.providers.forEach((p) => {
+                    map[p.id] = p.color;
+                    identities[p.id] = p;
+                    if (!identitiesByLabel[p.label]) identitiesByLabel[p.label] = [];
+                    identitiesByLabel[p.label].push(p);
+                });
                 providerColorsById = map;
                 providerIdentitiesById = identities;
+                providerIdentitiesByLabel = identitiesByLabel;
                 profileIdentity = data.profile || null;
             })
             // A failed optional live-color refresh must still unblock Chat;
             // snapshots/fallbacks remain the resilient behavior offline.
-            .catch(() => { providerColorsById = {}; providerIdentitiesById = {}; });
+            .catch(() => { providerColorsById = {}; providerIdentitiesById = {}; providerIdentitiesByLabel = {}; });
     }
     // Keep the initial request as a promise that the first Chat render and
     // first streamed reply can await. Previously both used the still-null
@@ -432,9 +451,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return resolveAvatarColor(snapshotColor, false, label);
     }
     function resolveProviderIdentityById(providerId, snapshotColor, snapshotLabel) {
-        const live = providerId != null && providerIdentitiesById && providerIdentitiesById[providerId];
+        // Current records are deliberately id-only: label matching is a
+        // compatibility bridge for null-ID history, never a fallback for a
+        // present but deleted/unrecognised id.
+        const live = providerId != null
+            ? providerIdentitiesById && providerIdentitiesById[providerId]
+            : uniqueProviderByLabel(providerIdentitiesByLabel, snapshotLabel);
         const label = (live && live.label) || snapshotLabel || 'Agent';
-        return { label, avatarUrl: live && live.avatarUrl, color: resolveProviderColorById(providerId, snapshotColor, label) };
+        return {
+            label,
+            avatarUrl: live && live.avatarUrl,
+            color: live ? resolveAvatarColor(live.color, false, label) : resolveProviderColorById(providerId, snapshotColor, label)
+        };
     }
 
     // The hex a color-picker swatch should default to when no custom color is
