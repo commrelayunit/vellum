@@ -571,6 +571,16 @@ select option:hover {
 }
 .review-summary { margin: .6rem; color: var(--ink); }
 .review-list { overflow-y: auto; padding: 0 .6rem .6rem; }
+.review-section { margin-bottom: .7rem; }
+.review-section-toggle { width: 100%; display: flex; align-items: center; gap: .35rem; border: 0; border-bottom: 1px solid var(--soft-rule); background: transparent; color: var(--ink); padding: .35rem 0; cursor: pointer; font: 600 12px/1.3 inherit; text-align: left; }
+.review-section-toggle::before { content: '▾'; display: inline-block; transition: transform .15s ease; }
+.review-section-toggle[aria-expanded="false"]::before { transform: rotate(-90deg); }
+.review-section-count { opacity: .65; font-weight: normal; }
+/* Accepted proposals are intentionally quiet history: still readable and
+   keyboard-accessible, but visually secondary to pending decisions. */
+.review-section-accepted { opacity: .72; }
+.review-section-accepted .review-section-toggle { color: color-mix(in srgb, var(--ink) 76%, var(--paper)); }
+.review-section-accepted .proposal-card { background: color-mix(in srgb, var(--paper) 78%, var(--vellum)); }
 .proposal-card { border: 1px solid var(--soft-rule); border-left: 3px solid var(--review-copper); padding: .55rem; margin-bottom: .55rem; background: var(--paper); }
 .proposal-card h4 { margin: 0 0 .45rem; display: flex; align-items: center; gap: .35rem; font-size: 12px; }
 .proposal-card h4 span { text-transform: capitalize; }

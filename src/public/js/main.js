@@ -608,6 +608,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (reviseContextDismiss) reviseContextDismiss.addEventListener('click', clearReviseContext);
 
+    // Keep the two Review groups independently controllable while a refresh
+    // (including the one after Accept/Reject) redraws their cards. Pending is
+    // deliberately open on first visit; accepted edits are useful history but
+    // should not compete with work that still needs a decision.
+    const reviewSectionsExpanded = { pending: true, accepted: false };
+    function reviewSection(title, state, proposals) {
+        const section = document.createElement('section');
+        section.className = `review-section review-section-${state}`;
+        const toggle = document.createElement('button');
+        toggle.type = 'button'; toggle.className = 'review-section-toggle';
+        toggle.setAttribute('aria-expanded', String(reviewSectionsExpanded[state]));
+        const label = document.createElement('span'); label.textContent = title;
+        const count = document.createElement('span'); count.className = 'review-section-count'; count.textContent = `(${proposals.length})`;
+        toggle.append(label, count);
+        const body = document.createElement('div'); body.className = 'review-section-body';
+        body.hidden = !reviewSectionsExpanded[state];
+        toggle.addEventListener('click', () => {
+            reviewSectionsExpanded[state] = !reviewSectionsExpanded[state];
+            toggle.setAttribute('aria-expanded', String(reviewSectionsExpanded[state]));
+            body.hidden = !reviewSectionsExpanded[state];
+        });
+        section.append(toggle, body);
+        return { section, body };
+    }
+
     function loadReview() {
         if (!reviewFileId || !reviewList) return;
         fetch(`/api/files/${reviewFileId}/proposals`).then(async r => {
@@ -630,12 +655,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!stillPending) clearReviseContext();
             }
             reviewList.innerHTML = '';
+            const pendingSection = reviewSection('Pending', 'pending', proposals.filter(p => p.state === 'pending'));
+            const acceptedSection = reviewSection('Accepted', 'accepted', proposals.filter(p => p.state === 'accepted'));
+            reviewList.append(pendingSection.section, acceptedSection.section);
             proposals.forEach(p => {
                 const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
-                const authorLabel = p.provider_label || 'Agent';
-                const identityColor = resolveProviderColorById(p.provider_id, p.provider_color, authorLabel);
+                const identity = resolveProviderIdentityById(p.provider_id, p.provider_color, p.provider_label);
+                const authorLabel = identity.label;
                 const heading = document.createElement('h4');
-                heading.appendChild(buildIdentityChip(authorLabel, identityColor));
+                heading.appendChild(buildIdentityChip(authorLabel, identity.color, identity.avatarUrl));
                 const loc = locationLabel(p);
                 const headingText = document.createElement('span');
                 headingText.textContent = `${p.state} · ${authorLabel}${loc ? ` · ${loc}` : ''}`;
@@ -667,7 +695,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         const input = document.getElementById('chat-input'); if (input) input.focus();
                     }); actions.appendChild(revise); card.appendChild(actions);
                 }
-                reviewList.appendChild(card);
+                if (p.state === 'pending') pendingSection.body.appendChild(card);
+                else if (p.state === 'accepted') acceptedSection.body.appendChild(card);
+                // Existing non-accepted terminal states remain visible in
+                // their established treatment below the two primary groups.
+                else reviewList.appendChild(card);
             });
         }).catch((error) => { reviewSummary.textContent = error.message || 'Could not load review proposals.'; });
     }
