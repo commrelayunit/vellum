@@ -418,6 +418,15 @@ select option:hover {
   min-width: 0;
 }
 
+/* Keep the writing surface independent from any surrounding flex/UI
+   alignment. This is deliberately scoped to CodeMirror's text nodes, so it
+   cannot affect the header, sidebar, or Review's semantic diff treatment. */
+.editor-textarea .cm-content,
+.editor-textarea .cm-line {
+  text-align: left;
+  text-indent: 0;
+}
+
 /* The name tag glued to the cursor's exact position (y-codemirror.next's
    own remote widget) turned out to be the wrong shape for this: too easy
    to miss while just watching someone type, and pinning a visible label to
@@ -604,6 +613,7 @@ select option:hover {
   font-weight: bold;
   flex-shrink: 0;
 }
+.identity-chip img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 
 /* Inline proposal diff treatment in the editor itself: the still-unchanged
    original text is struck through and the proposed replacement shown
@@ -632,6 +642,8 @@ select option:hover {
 .proposal-diff-new {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: .3rem;
   border: 0;
   cursor: pointer;
@@ -639,6 +651,11 @@ select option:hover {
   color: var(--ink);
   padding: 0 .3rem;
   margin: 0 .2rem;
+  max-width: 100%;
+  text-align: left;
+  text-indent: 0;
+  white-space: pre-wrap;
+  vertical-align: baseline;
   border-radius: 3px;
   background: color-mix(in srgb, var(--agent-color) 20%, transparent);
   border-bottom: 2px solid var(--agent-color);

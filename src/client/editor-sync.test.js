@@ -194,6 +194,27 @@ test('buildTheme is called with the same localColor used for the local awareness
   );
 });
 
+test('CodeMirror document lines explicitly use natural left alignment without indentation', () => {
+  const source = loadSource();
+  const themeSource = extractFunctionSource(source, 'buildTheme');
+  assert.match(themeSource, /'\.cm-content':[\s\S]*?textAlign:\s*'left'/);
+  assert.match(themeSource, /'\.cm-content':[\s\S]*?textIndent:\s*'0'/);
+  assert.match(themeSource, /'\.cm-line':\s*\{[\s\S]*?textAlign:\s*'left'/);
+  assert.match(themeSource, /'\.cm-line':\s*\{[\s\S]*?textIndent:\s*'0'/);
+});
+
+test('the inline proposal widget wraps and remains left-aligned inside the editor', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'style.css'), 'utf8');
+  const match = css.match(/\.proposal-diff-new\s*\{([\s\S]*?)\n\}/);
+  assert.ok(match, 'expected the inline proposal diff CSS rule');
+  assert.match(match[1], /justify-content:\s*flex-start/);
+  assert.match(match[1], /flex-wrap:\s*wrap/);
+  assert.match(match[1], /max-width:\s*100%/);
+  assert.match(match[1], /text-align:\s*left/);
+  assert.match(match[1], /text-indent:\s*0/);
+  assert.match(match[1], /white-space:\s*pre-wrap/);
+});
+
 test('the local text selection is themed with the same localColor via drawSelection/.cm-selectionBackground', () => {
   const source = loadSource();
   assert.match(source, /drawSelection\(\)/, 'expected the drawSelection() extension so the local selection can be themed');

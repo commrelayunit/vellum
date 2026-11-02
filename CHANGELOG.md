@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 History prior to 1.0.0 was not tracked in this file.
 
+## [1.1.6] - 2026-11-02
+
+### Fixed
+
+- Chat now waits for the live provider-color map before rendering history or
+  the first streamed reply, so saved profile/provider identity colors are
+  used instead of first-paint palette fallbacks.
+- CodeMirror document lines and inline pending-proposal pills explicitly use
+  natural left alignment and zero indentation; long proposal text also wraps
+  within the writing surface.
+
 ## [1.1.5] - 2026-11-01
 
 ### Fixed
