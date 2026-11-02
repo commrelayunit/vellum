@@ -215,6 +215,22 @@ test('the inline proposal widget wraps and remains left-aligned inside the edito
   assert.match(match[1], /white-space:\s*pre-wrap/);
 });
 
+test('legacy null-ID proposal tooltips resolve a unique live label to current color and avatar', () => {
+  const source = loadSource();
+  assert.match(source, /providerIdentitiesByLabel/);
+  assert.match(source, /proposal\.provider_id != null[\s\S]*?providerIdentitiesById[\s\S]*?:\s*uniqueProviderByLabel\(providerIdentitiesByLabel, proposal\.provider_label\)/);
+  assert.match(source, /image\.src = identity\.avatarUrl/);
+  assert.match(source, /dot\.style\.backgroundColor = proposalColor\(proposal\)/);
+});
+
+test('proposal tooltip can be pinned by click and closed with an accessible close button', () => {
+  const source = loadSource();
+  assert.match(source, /widget\.addEventListener\('click', \(\) => showProposalPopover\(widget, this\.proposal, true\)\)/);
+  assert.match(source, /close\.setAttribute\('aria-label', 'Close pinned proposal details'\)/);
+  assert.match(source, /close\.addEventListener\('click', closePinnedProposalPopover\)/);
+  assert.match(source, /if \(pinnedProposalPopover\) return;/);
+});
+
 test('the local text selection is themed with the same localColor via drawSelection/.cm-selectionBackground', () => {
   const source = loadSource();
   assert.match(source, /drawSelection\(\)/, 'expected the drawSelection() extension so the local selection can be themed');

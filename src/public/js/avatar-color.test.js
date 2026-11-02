@@ -70,3 +70,29 @@ test('the local Chat participant uses the saved profile cursor color', () => {
     'Chat must resolve the current profile identity, with mount data as its initial fallback'
   );
 });
+
+function loadUniqueProviderByLabel() {
+  const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  const match = source.match(/function uniqueProviderByLabel\(identitiesByLabel, label\) \{[\s\S]*?\n    \}/);
+  assert.ok(match, 'expected the legacy unique-label resolver in main.js');
+  // eslint-disable-next-line no-new-func -- deliberately exercising the browser helper from source
+  return new Function(`${match[0]}\nreturn uniqueProviderByLabel;`)();
+}
+
+test('legacy null-ID history resolves exactly one current provider label to its live avatar and color', () => {
+  const uniqueProviderByLabel = loadUniqueProviderByLabel();
+  const c3po = { id: 3, label: 'C-3PO Chat', avatarUrl: 'https://www.gravatar.com/avatar/c3po', color: '#e4b830' };
+  assert.deepEqual(uniqueProviderByLabel({ 'C-3PO Chat': [c3po] }, 'C-3PO Chat'), c3po);
+
+  const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.match(source, /providerId != null[\s\S]*?providerIdentitiesById[\s\S]*?:\s*uniqueProviderByLabel\(providerIdentitiesByLabel, snapshotLabel\)/);
+  assert.match(source, /avatarUrl: live && live\.avatarUrl/);
+  assert.match(source, /color: live \? resolveAvatarColor\(live\.color, false, label\)/);
+});
+
+test('legacy label resolution refuses missing and duplicate provider labels', () => {
+  const uniqueProviderByLabel = loadUniqueProviderByLabel();
+  assert.equal(uniqueProviderByLabel({}, 'C-3PO Chat'), null);
+  assert.equal(uniqueProviderByLabel({ 'C-3PO Chat': [{ id: 1 }, { id: 2 }] }, 'C-3PO Chat'), null);
+  assert.equal(uniqueProviderByLabel({ 'C-3PO Chat': [{ id: 1 }] }, null), null);
+});

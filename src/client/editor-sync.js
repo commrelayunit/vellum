@@ -365,24 +365,51 @@ function hashProviderLabel(str) {
 // diff/popover actually track a color changed in Settings, instead of
 // permanently showing whatever it was at proposal-creation time.
 let providerColorsById = null;
+let providerIdentitiesById = null;
+let providerIdentitiesByLabel = null;
 function loadProviderColors() {
   return fetch('/api/providers/colors')
     .then((r) => r.json())
     .then((data) => {
       if (!data.success) return;
       const map = {};
-      data.providers.forEach((p) => { map[p.id] = p.color; });
+      const identities = {};
+      const identitiesByLabel = {};
+      data.providers.forEach((p) => {
+        map[p.id] = p.color;
+        identities[p.id] = p;
+        if (!identitiesByLabel[p.label]) identitiesByLabel[p.label] = [];
+        identitiesByLabel[p.label].push(p);
+      });
       providerColorsById = map;
+      providerIdentitiesById = identities;
+      providerIdentitiesByLabel = identitiesByLabel;
     })
     .catch(() => {});
 }
 loadProviderColors();
 
+function uniqueProviderByLabel(identitiesByLabel, label) {
+  if (!label || !identitiesByLabel) return null;
+  const matches = identitiesByLabel[label];
+  return Array.isArray(matches) && matches.length === 1 ? matches[0] : null;
+}
+
+function proposalIdentity(proposal) {
+  const live = proposal.provider_id != null
+    ? providerIdentitiesById && providerIdentitiesById[proposal.provider_id]
+    : uniqueProviderByLabel(providerIdentitiesByLabel, proposal.provider_label);
+  return {
+    label: (live && live.label) || proposal.provider_label || 'Agent',
+    color: (live && live.color) || proposal.provider_color,
+    avatarUrl: live && live.avatarUrl
+  };
+}
+
 function proposalColor(proposal) {
-  const label = proposal.provider_label || 'Agent';
-  const liveColor = (proposal.provider_id != null && providerColorsById && Object.prototype.hasOwnProperty.call(providerColorsById, proposal.provider_id))
-    ? providerColorsById[proposal.provider_id]
-    : proposal.provider_color;
+  const identity = proposalIdentity(proposal);
+  const label = identity.label;
+  const liveColor = identity.color;
   return liveColor || PROPOSAL_FALLBACK_COLORS[hashProviderLabel(label) % PROPOSAL_FALLBACK_COLORS.length];
 }
 
@@ -412,22 +439,35 @@ function popoverLocationLabel(proposal) {
 // Structured hover/focus card: distinct author+location header, then an
 // Original and a Proposed section, each legible on its own rather than one
 // run-together pre-wrapped blob.
-function showProposalPopover(anchorEl, proposal) {
+let pinnedProposalPopover = false;
+function showProposalPopover(anchorEl, proposal, pinned = false) {
   let popover = document.getElementById('proposal-anchor-popover');
-  if (!popover) { popover = document.createElement('div'); popover.id = 'proposal-anchor-popover'; popover.className = 'proposal-anchor-popover'; popover.setAttribute('role', 'tooltip'); document.body.appendChild(popover); }
+  if (!popover) { popover = document.createElement('div'); popover.id = 'proposal-anchor-popover'; popover.className = 'proposal-anchor-popover'; document.body.appendChild(popover); }
+  pinnedProposalPopover = pinned;
+  popover.setAttribute('role', pinned ? 'dialog' : 'tooltip');
+  popover.setAttribute('aria-label', pinned ? 'Pinned proposal details' : 'Proposal details');
   popover.innerHTML = '';
   popover.style.setProperty('--agent-color', proposalColor(proposal));
+
+  const identity = proposalIdentity(proposal);
 
   const header = document.createElement('div');
   header.className = 'proposal-popover-header';
   const dot = document.createElement('span');
   dot.className = 'identity-chip';
   dot.style.backgroundColor = proposalColor(proposal);
-  dot.textContent = initialsFor(proposal.provider_label || 'Agent');
+  dot.textContent = initialsFor(identity.label);
   dot.setAttribute('aria-hidden', 'true');
+  if (identity.avatarUrl) {
+    const image = document.createElement('img');
+    image.src = identity.avatarUrl; image.alt = '';
+    image.onerror = () => { image.remove(); };
+    dot.textContent = '';
+    dot.appendChild(image);
+  }
   header.appendChild(dot);
   const author = document.createElement('span');
-  author.textContent = proposal.provider_label || 'Agent';
+  author.textContent = identity.label;
   header.appendChild(author);
   const loc = popoverLocationLabel(proposal);
   if (loc) {
@@ -435,6 +475,13 @@ function showProposalPopover(anchorEl, proposal) {
     locEl.className = 'proposal-popover-location';
     locEl.textContent = loc;
     header.appendChild(locEl);
+  }
+  if (pinned) {
+    const close = document.createElement('button');
+    close.type = 'button'; close.className = 'proposal-popover-close';
+    close.setAttribute('aria-label', 'Close pinned proposal details'); close.textContent = '×';
+    close.addEventListener('click', closePinnedProposalPopover);
+    header.appendChild(close);
   }
   popover.appendChild(header);
 
@@ -481,6 +528,12 @@ function showProposalPopover(anchorEl, proposal) {
   if (overflowX > 0) popover.style.left = `${Math.max(4, rect.left - overflowX - 8)}px`;
 }
 function hideProposalPopover() {
+  if (pinnedProposalPopover) return;
+  const popover = document.getElementById('proposal-anchor-popover');
+  if (popover) popover.hidden = true;
+}
+function closePinnedProposalPopover() {
+  pinnedProposalPopover = false;
   const popover = document.getElementById('proposal-anchor-popover');
   if (popover) popover.hidden = true;
 }
@@ -509,6 +562,7 @@ class ProposalDiffWidget extends WidgetType {
     const show = () => showProposalPopover(widget, this.proposal);
     widget.addEventListener('mouseenter', show); widget.addEventListener('focus', show);
     widget.addEventListener('mouseleave', hideProposalPopover); widget.addEventListener('blur', hideProposalPopover);
+    widget.addEventListener('click', () => showProposalPopover(widget, this.proposal, true));
     return widget;
   }
   ignoreEvent(event) {

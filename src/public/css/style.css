@@ -572,10 +572,12 @@ select option:hover {
 .review-summary { margin: .6rem; color: var(--ink); }
 .review-list { overflow-y: auto; padding: 0 .6rem .6rem; }
 .review-section { margin-bottom: .7rem; }
-.review-section-toggle { width: 100%; display: flex; align-items: center; gap: .35rem; border: 0; border-bottom: 1px solid var(--soft-rule); background: transparent; color: var(--ink); padding: .35rem 0; cursor: pointer; font: 600 12px/1.3 inherit; text-align: left; }
-.review-section-toggle::before { content: '▾'; display: inline-block; transition: transform .15s ease; }
-.review-section-toggle[aria-expanded="false"]::before { transform: rotate(-90deg); }
-.review-section-count { opacity: .65; font-weight: normal; }
+.review-section-toggle { display: inline-flex; align-items: center; gap: .3rem; border: 0; border-radius: 3px; background: transparent; color: var(--ink); padding: .22rem .25rem; cursor: pointer; font: 12px/1.3 inherit; letter-spacing: .01em; text-align: left; }
+.review-section-toggle::before { content: ''; width: .42rem; height: .42rem; box-sizing: border-box; border: 1px solid currentColor; border-radius: 50%; opacity: .62; transition: background-color .15s ease, box-shadow .15s ease; }
+.review-section-toggle[aria-expanded="true"]::before { background: currentColor; box-shadow: inset 0 0 0 2px var(--paper); }
+.review-section-toggle:hover { background: color-mix(in srgb, var(--vellum) 72%, transparent); }
+.review-section-toggle:focus-visible { outline: 2px solid var(--presence-you); outline-offset: 2px; }
+.review-section-count { opacity: .58; font-size: 11px; }
 /* Accepted proposals are intentionally quiet history: still readable and
    keyboard-accessible, but visually secondary to pending decisions. */
 .review-section-accepted { opacity: .72; }
@@ -704,6 +706,9 @@ select option:hover {
 }
 .proposal-popover-header { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-weight: bold; }
 .proposal-popover-location { margin-left: auto; font-weight: normal; opacity: .65; font-size: 11px; }
+.proposal-popover-close { appearance: none; border: 0; background: transparent; color: var(--ink); cursor: pointer; font: 18px/1 inherit; opacity: .7; padding: 0 .1rem; }
+.proposal-popover-close:hover, .proposal-popover-close:focus-visible { opacity: 1; }
+.proposal-popover-close:focus-visible { outline: 2px solid var(--presence-you); outline-offset: 1px; border-radius: 2px; }
 .proposal-popover-section { margin-top: .45rem; }
 .proposal-popover-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .6; margin-bottom: .2rem; }
 .proposal-popover-text { white-space: pre-wrap; max-height: 6rem; overflow: auto; padding: .35rem .45rem; border-radius: 3px; }
