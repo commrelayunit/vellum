@@ -268,11 +268,11 @@ app.get('/settings', requireAuth, (req, res) => {
   res.render('settings', { providers, profile });
 });
 
-// Lets the writing page resolve a provider's CURRENT color live - for Chat
+// Lets the writing page resolve CURRENT participant identity live - for Chat
 // history and the editor's pending-proposal diff/popover, both of which
 // otherwise only have the provider_color snapshot taken when that message/
 // proposal was created (see migrations 0011-0014). Deliberately id/label/
-// color only, not providersRepo.list()'s full view model (no baseUrl,
+// display identity only, not providersRepo.list()'s full view model (no baseUrl,
 // maskedKey, etc.) - this is fetched by the writing page just to repaint
 // identity colors, not to manage providers. Includes inactive providers
 // (not just activeInWorkspace) since a provider used in past chat history
@@ -280,8 +280,9 @@ app.get('/settings', requireAuth, (req, res) => {
 // still pick up its current color rather than falling back to the stale
 // snapshot as if it had been deleted.
 app.get('/api/providers/colors', requireAuth, (req, res) => {
-  const providers = providersRepo.list().map((p) => ({ id: p.id, label: p.label, color: p.color }));
-  res.json({ success: true, providers });
+  const providers = providersRepo.list().map((p) => ({ id: p.id, label: p.label, avatarUrl: p.avatarUrl, color: p.color }));
+  const profile = userProfileRepo.get();
+  res.json({ success: true, providers, profile: { label: profile.label, avatarUrl: profile.avatarUrl, color: profile.cursorColor } });
 });
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;

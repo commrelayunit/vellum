@@ -395,18 +395,32 @@ document.addEventListener('DOMContentLoaded', function() {
     // case a snapshot is actually the right answer, since there's no "current
     // color" left to ask for.
     let providerColorsById = null;
+    let providerIdentitiesById = null;
+    let profileIdentity = null;
     function loadProviderColors() {
         return fetch('/api/providers/colors')
             .then((r) => r.json())
             .then((data) => {
-                if (!data.success) return;
+                if (!data.success) {
+                    providerColorsById = {}; providerIdentitiesById = {};
+                    return;
+                }
                 const map = {};
-                data.providers.forEach((p) => { map[p.id] = p.color; });
+                const identities = {};
+                data.providers.forEach((p) => { map[p.id] = p.color; identities[p.id] = p; });
                 providerColorsById = map;
+                providerIdentitiesById = identities;
+                profileIdentity = data.profile || null;
             })
-            .catch(() => {});
+            // A failed optional live-color refresh must still unblock Chat;
+            // snapshots/fallbacks remain the resilient behavior offline.
+            .catch(() => { providerColorsById = {}; providerIdentitiesById = {}; });
     }
-    loadProviderColors();
+    // Keep the initial request as a promise that the first Chat render and
+    // first streamed reply can await. Previously both used the still-null
+    // map while this request was in flight, so a saved provider color lost
+    // to the hash fallback on the page's first paint.
+    const providerColorsReady = loadProviderColors();
 
     // providerId may be null/undefined (no provider on record, or this
     // message/proposal predates the provider_id column) - always fall back
@@ -416,6 +430,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return resolveAvatarColor(providerColorsById[providerId], false, label);
         }
         return resolveAvatarColor(snapshotColor, false, label);
+    }
+    function resolveProviderIdentityById(providerId, snapshotColor, snapshotLabel) {
+        const live = providerId != null && providerIdentitiesById && providerIdentitiesById[providerId];
+        const label = (live && live.label) || snapshotLabel || 'Agent';
+        return { label, avatarUrl: live && live.avatarUrl, color: resolveProviderColorById(providerId, snapshotColor, label) };
     }
 
     // The hex a color-picker swatch should default to when no custom color is
@@ -456,11 +475,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // smaller and inline with text rather than a standalone element.
     // Decorative: the author's name is rendered as real text right next to
     // it, so assistive tech doesn't need this element announced too.
-    function buildIdentityChip(label, color) {
+    function buildIdentityChip(label, color, avatarUrl) {
         const chip = document.createElement('span');
         chip.className = 'identity-chip';
         chip.style.backgroundColor = color;
-        chip.textContent = initialsFor(label);
+        if (avatarUrl) {
+            const image = document.createElement('img'); image.src = avatarUrl; image.alt = '';
+            image.onerror = function() { image.remove(); chip.textContent = initialsFor(label); };
+            chip.appendChild(image);
+        } else chip.textContent = initialsFor(label);
         chip.setAttribute('aria-hidden', 'true');
         return chip;
     }
@@ -585,6 +608,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (reviseContextDismiss) reviseContextDismiss.addEventListener('click', clearReviseContext);
 
+    // Keep the two Review groups independently controllable while a refresh
+    // (including the one after Accept/Reject) redraws their cards. Pending is
+    // deliberately open on first visit; accepted edits are useful history but
+    // should not compete with work that still needs a decision.
+    const reviewSectionsExpanded = { pending: true, accepted: false };
+    function reviewSection(title, state, proposals) {
+        const section = document.createElement('section');
+        section.className = `review-section review-section-${state}`;
+        const toggle = document.createElement('button');
+        toggle.type = 'button'; toggle.className = 'review-section-toggle';
+        toggle.setAttribute('aria-expanded', String(reviewSectionsExpanded[state]));
+        const label = document.createElement('span'); label.textContent = title;
+        const count = document.createElement('span'); count.className = 'review-section-count'; count.textContent = `(${proposals.length})`;
+        toggle.append(label, count);
+        const body = document.createElement('div'); body.className = 'review-section-body';
+        body.hidden = !reviewSectionsExpanded[state];
+        toggle.addEventListener('click', () => {
+            reviewSectionsExpanded[state] = !reviewSectionsExpanded[state];
+            toggle.setAttribute('aria-expanded', String(reviewSectionsExpanded[state]));
+            body.hidden = !reviewSectionsExpanded[state];
+        });
+        section.append(toggle, body);
+        return { section, body };
+    }
+
     function loadReview() {
         if (!reviewFileId || !reviewList) return;
         fetch(`/api/files/${reviewFileId}/proposals`).then(async r => {
@@ -607,12 +655,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!stillPending) clearReviseContext();
             }
             reviewList.innerHTML = '';
+            const pendingSection = reviewSection('Pending', 'pending', proposals.filter(p => p.state === 'pending'));
+            const acceptedSection = reviewSection('Accepted', 'accepted', proposals.filter(p => p.state === 'accepted'));
+            reviewList.append(pendingSection.section, acceptedSection.section);
             proposals.forEach(p => {
                 const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
-                const authorLabel = p.provider_label || 'Agent';
-                const identityColor = resolveProviderColorById(p.provider_id, p.provider_color, authorLabel);
+                const identity = resolveProviderIdentityById(p.provider_id, p.provider_color, p.provider_label);
+                const authorLabel = identity.label;
                 const heading = document.createElement('h4');
-                heading.appendChild(buildIdentityChip(authorLabel, identityColor));
+                heading.appendChild(buildIdentityChip(authorLabel, identity.color, identity.avatarUrl));
                 const loc = locationLabel(p);
                 const headingText = document.createElement('span');
                 headingText.textContent = `${p.state} · ${authorLabel}${loc ? ` · ${loc}` : ''}`;
@@ -644,7 +695,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         const input = document.getElementById('chat-input'); if (input) input.focus();
                     }); actions.appendChild(revise); card.appendChild(actions);
                 }
-                reviewList.appendChild(card);
+                if (p.state === 'pending') pendingSection.body.appendChild(card);
+                else if (p.state === 'accepted') acceptedSection.body.appendChild(card);
+                // Existing non-accepted terminal states remain visible in
+                // their established treatment below the two primary groups.
+                else reviewList.appendChild(card);
             });
         }).catch((error) => { reviewSummary.textContent = error.message || 'Could not load review proposals.'; });
     }
@@ -655,7 +710,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const fileId = editorForChat.dataset.fileId;
         // Same color the presence-stack "you" avatar and live cursor use -
         // resolved once since it never changes mid-session.
-        const youColor = resolveAvatarColor(editorForChat.dataset.profileCursorColor, true, 'You');
+        function currentProfileIdentity() {
+            const profile = profileIdentity || { label: editorForChat.dataset.profileLabel, avatarUrl: editorForChat.dataset.profileAvatarUrl, color: editorForChat.dataset.profileCursorColor };
+            return { label: profile.label || 'You', avatarUrl: profile.avatarUrl, color: resolveAvatarColor(profile.color, true, profile.label || 'You') };
+        }
         const pendingReferencesEl = document.getElementById('chat-pending-references');
         let pendingReferences = [];
 
@@ -714,14 +772,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // keeping that resolution out of addMessage lets 'Error' messages
         // (not a participant - skip the chip/rail entirely) stay a simple
         // caller-side check.
-        function addMessage(author, content, className, timeString, selections, reviseContext, identityColor) {
+        function addMessage(author, content, className, timeString, selections, reviseContext, identityColor, avatarUrl) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${className || ''}`;
 
             const authorDiv = document.createElement('div');
             authorDiv.className = 'message-author';
             if (author !== 'Error' && identityColor) {
-                authorDiv.appendChild(buildIdentityChip(author, identityColor));
+                authorDiv.appendChild(buildIdentityChip(author, identityColor, avatarUrl));
                 messageDiv.style.setProperty('--identity-color', identityColor);
             }
             const authorNameEl = document.createElement('span');
@@ -781,10 +839,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!data.success) return;
                     data.messages.forEach(function(message) {
                         if (message.role === 'user') {
-                            addMessage('You', message.content, '', formatTime(message.createdAt), message.selections, null, youColor);
+                            const profile = currentProfileIdentity();
+                            addMessage(profile.label, message.content, '', formatTime(message.createdAt), message.selections, null, profile.color, profile.avatarUrl);
                         } else if (message.role === 'assistant') {
-                            const label = message.providerLabel || 'Agent';
-                            addMessage(label, message.content, 'agent-message', formatTime(message.createdAt), null, null, resolveProviderColorById(message.providerId, message.providerColor, label));
+                            const identity = resolveProviderIdentityById(message.providerId, message.providerColor, message.providerLabel);
+                            addMessage(identity.label, message.content, 'agent-message', formatTime(message.createdAt), null, null, identity.color, identity.avatarUrl);
                         } else {
                             addMessage('Error', message.content, 'error-message', formatTime(message.createdAt));
                         }
@@ -809,12 +868,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function sendMessage() {
+            // A fast first click can beat the initial /api/providers/colors
+            // response just as history used to. Defer once so the provider
+            // rail/chip created for the SSE reply uses its saved live color.
+            if (providerColorsById === null) {
+                providerColorsReady.then(sendMessage);
+                return;
+            }
             const message = chatInput.value.trim();
             if (!message || !chatProviderSelect) return;
 
             const selectionsForSend = pendingReferences.slice();
             const reviseOfForSend = activeReviseContext ? { ...activeReviseContext } : null;
-            addMessage('You', message, '', undefined, selectionsForSend, reviseOfForSend, youColor);
+            const profile = currentProfileIdentity();
+            addMessage(profile.label, message, '', undefined, selectionsForSend, reviseOfForSend, profile.color, profile.avatarUrl);
             chatInput.value = '';
             chatInput.disabled = true;
             setButtonLoading(sendChatBtn, true);
@@ -827,8 +894,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const providerId = chatProviderSelect.value;
             const selectedOption = chatProviderSelect.options[chatProviderSelect.selectedIndex];
-            const providerLabel = selectedOption.textContent;
-            const providerColor = resolveProviderColorById(providerId, selectedOption.dataset.color, providerLabel);
+            const selectedIdentity = resolveProviderIdentityById(providerId, selectedOption.dataset.color, selectedOption.textContent);
+            const providerLabel = selectedIdentity.label;
+            const providerColor = selectedIdentity.color;
             let replyContentEl = null;
 
             fetch(`/api/chat/${fileId}/messages`, {
@@ -868,7 +936,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const payload = JSON.parse(eventText.slice(6));
                             if (payload.type === 'delta') {
                                 if (!replyContentEl) {
-                                    replyContentEl = addMessage(providerLabel, '', 'agent-message', undefined, null, null, providerColor);
+                                    replyContentEl = addMessage(providerLabel, '', 'agent-message', undefined, null, null, providerColor, selectedIdentity.avatarUrl);
                                 }
                                 replyContentEl.textContent += payload.text;
                                 chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -908,7 +976,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        loadHistory();
+        // History needs the live provider map before it builds the author
+        // rails/chips. Calling this directly raced the request above and
+        // rendered hash fallback colors until a later visibility change.
+        providerColorsReady.then(loadHistory);
 
         // Settings lives on a separate page, so the most common way a
         // provider color change actually reaches this already-open writing

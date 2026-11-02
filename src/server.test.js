@@ -687,7 +687,10 @@ test('GET /api/providers/colors reflects a color change immediately, not the col
   const { provider } = await createRes.json();
 
   const firstColors = await (await fetch(`${base}/api/providers/colors`, { headers: { Cookie: cookie } })).json();
-  assert.deepEqual(firstColors.providers.find((p) => p.id === provider.id), { id: provider.id, label: 'OpenClaw', color: '#c96f48' });
+  assert.deepEqual(firstColors.providers.find((p) => p.id === provider.id), { id: provider.id, label: 'OpenClaw', avatarUrl: null, color: '#c96f48' });
+  assert.equal(typeof firstColors.profile.label, 'string');
+  assert.equal(firstColors.profile.avatarUrl, null);
+  assert.equal(firstColors.profile.color, null);
 
   await fetch(`${base}/api/providers/${provider.id}`, {
     method: 'POST',

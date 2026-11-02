@@ -26,7 +26,16 @@ function buildTheme(localColor, showLineNumbers) {
       fontSize: '14px',
       lineHeight: '1.5',
       padding: '0',
+      // CodeMirror content is writing, never an application chrome row.
+      // State this in the theme so document text cannot inherit alignment
+      // or indentation from a surrounding layout rule.
+      textAlign: 'left',
+      textIndent: '0',
       caretColor: 'var(--ink)'
+    },
+    '.cm-line': {
+      textAlign: 'left',
+      textIndent: '0'
     },
     '.cm-scroller': {
       fontFamily: "'Courier New', monospace",

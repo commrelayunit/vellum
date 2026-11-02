@@ -46,3 +46,27 @@ test('other providers fall back to a hash-derived color when no custom color is 
   const color = resolveColor({ customColor: '', isOwnProfile: false, label: 'OpenClaw' });
   assert.ok(['var(--presence-you)', 'var(--presence-2)', 'var(--presence-3)'].includes(color));
 });
+
+test('initial Chat history and the first streamed reply wait for live provider colors', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+
+  // This guards the reported first-paint race: loadHistory() used to run
+  // immediately after starting the colors fetch, baking hash fallbacks into
+  // historical rails/chips. A fast first send had the same issue for SSE.
+  assert.match(source, /const providerColorsReady = loadProviderColors\(\);/);
+  assert.match(source, /providerColorsReady\.then\(loadHistory\);/);
+  assert.match(
+    source,
+    /if \(providerColorsById === null\) \{\s*providerColorsReady\.then\(sendMessage\);\s*return;/,
+    'the first send must wait for the same live-color request before creating its streamed assistant message'
+  );
+});
+
+test('the local Chat participant uses the saved profile cursor color', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.match(
+    source,
+    /const profile = profileIdentity \|\| \{ label: editorForChat\.dataset\.profileLabel, avatarUrl: editorForChat\.dataset\.profileAvatarUrl, color: editorForChat\.dataset\.profileCursorColor \};/,
+    'Chat must resolve the current profile identity, with mount data as its initial fallback'
+  );
+});

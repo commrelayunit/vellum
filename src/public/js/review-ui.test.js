@@ -17,3 +17,16 @@ test('review UI no longer offers a live-edit opt-in - agent edits always go thro
   assert.doesNotMatch(source, /live-edit-opt-in/);
   assert.doesNotMatch(source, /editMode/);
 });
+
+test('review UI groups Pending and Accepted independently, with Pending expanded initially', () => {
+  assert.match(source, /const reviewSectionsExpanded = \{ pending: true, accepted: false \};/);
+  assert.match(source, /reviewSection\('Pending', 'pending', proposals\.filter\(p => p\.state === 'pending'\)\)/);
+  assert.match(source, /reviewSection\('Accepted', 'accepted', proposals\.filter\(p => p\.state === 'accepted'\)\)/);
+  assert.match(source, /if \(p\.state === 'pending'\) pendingSection\.body\.appendChild\(card\)/);
+  assert.match(source, /else if \(p\.state === 'accepted'\) acceptedSection\.body\.appendChild\(card\)/);
+});
+
+test('review proposal identity chips use the live provider avatar with initials fallback', () => {
+  assert.match(source, /buildIdentityChip\(authorLabel, identity\.color, identity\.avatarUrl\)/);
+  assert.match(source, /image\.onerror = function\(\) \{ image\.remove\(\); chip\.textContent = initialsFor\(label\); \}/);
+});
