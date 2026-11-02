@@ -461,7 +461,7 @@ function showProposalPopover(anchorEl, proposal, pinned = false) {
   if (identity.avatarUrl) {
     const image = document.createElement('img');
     image.src = identity.avatarUrl; image.alt = '';
-    image.onerror = () => { image.remove(); };
+    image.onerror = () => { dot.textContent = initialsFor(identity.label); };
     dot.textContent = '';
     dot.appendChild(image);
   }

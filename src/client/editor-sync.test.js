@@ -223,6 +223,11 @@ test('legacy null-ID proposal tooltips resolve a unique live label to current co
   assert.match(source, /dot\.style\.backgroundColor = proposalColor\(proposal\)/);
 });
 
+test('proposal tooltip restores the resolved identity initials when its avatar fails to load', () => {
+  const source = loadSource();
+  assert.match(source, /image\.onerror = \(\) => \{ dot\.textContent = initialsFor\(identity\.label\); \};/);
+});
+
 test('proposal tooltip can be pinned by click and closed with an accessible close button', () => {
   const source = loadSource();
   assert.match(source, /widget\.addEventListener\('click', \(\) => showProposalPopover\(widget, this\.proposal, true\)\)/);
