@@ -20,7 +20,7 @@ test('migrate records each migration exactly once, even when called twice', () =
   migrate(db);
   migrate(db);
   const applied = db.prepare('SELECT id FROM schema_migrations').all().map((r) => r.id);
-  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace', '0004_chat_messages', '0005_provider_reasoning_effort', '0006_file_content_yjs', '0007_presence_colors', '0008_show_line_numbers', '0009_chat_message_selections', '0010_agent_edit_proposals', '0011_agent_edit_proposal_metadata', '0012_chat_message_provider_color', '0013_chat_message_provider_id', '0014_agent_edit_proposal_provider_id']);
+  assert.deepEqual(applied, ['0001_baseline', '0002_user_profile', '0003_provider_active_in_workspace', '0004_chat_messages', '0005_provider_reasoning_effort', '0006_file_content_yjs', '0007_presence_colors', '0008_show_line_numbers', '0009_chat_message_selections', '0010_agent_edit_proposals', '0011_agent_edit_proposal_metadata', '0012_chat_message_provider_color', '0013_chat_message_provider_id', '0014_agent_edit_proposal_provider_id', '0015_theme_preference']);
   db.close();
 });
 
@@ -38,12 +38,15 @@ test('a migration already recorded as applied is genuinely skipped, not just ide
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0009_chat_message_selections')").run();
   // 0012 and 0013 both add a column to chat_messages (0004, marked applied -
   // and therefore, per this test's own premise, never actually created
-  // here). Marking them applied too keeps this test exercising exactly
-  // what it's named for - 0010/0011/0014 still genuinely run below (0014
-  // alters agent_edit_proposals, which 0010 does create in this same run) -
-  // rather than failing on an unrelated missing table.
+  // here). 0015 similarly adds a column to user_profile (0002, also marked
+  // applied below and never actually created here). Marking all three
+  // applied too keeps this test exercising exactly what it's named for -
+  // 0010/0011/0014 still genuinely run below (0014 alters
+  // agent_edit_proposals, which 0010 does create in this same run) - rather
+  // than failing on an unrelated missing table.
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0012_chat_message_provider_color')").run();
   db.prepare("INSERT INTO schema_migrations (id) VALUES ('0013_chat_message_provider_id')").run();
+  db.prepare("INSERT INTO schema_migrations (id) VALUES ('0015_theme_preference')").run();
   migrate(db);
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
   assert.deepEqual(tables, ['agent_edit_proposals', 'schema_migrations']);

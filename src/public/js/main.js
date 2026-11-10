@@ -91,7 +91,48 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.key === 'Escape') closeMenu();
         });
     }
-    
+
+    // Header theme select - present on every signed-in page via
+    // partials/header.ejs. Resolves "system" the same way the inline
+    // before-paint script in <head> does, so switching back to it live
+    // matches what a reload would have shown.
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+        function applyResolvedTheme(preference) {
+            if (preference === 'light' || preference === 'dark') {
+                document.documentElement.setAttribute('data-theme', preference);
+                return;
+            }
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        }
+
+        themeSelect.addEventListener('change', function() {
+            const preference = themeSelect.value;
+            applyResolvedTheme(preference);
+            fetch('/api/profile/theme', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme: preference })
+            }).catch(function() {
+                // The theme already applied optimistically above; a failed
+                // save just means it won't persist past this page view, not
+                // worth interrupting the user with an error for.
+            });
+        });
+
+        // Keeps "System" genuinely live: if the OS-level preference changes
+        // while this page is open and the user hasn't overridden it with an
+        // explicit Light/Dark choice, follow along without needing a reload.
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+                if (themeSelect.value === 'system') {
+                    applyResolvedTheme('system');
+                }
+            });
+        }
+    }
+
     // Toggle preview mode
     const previewToggle = document.getElementById('preview-toggle');
     const editorContainer = document.getElementById('markdown-editor');

@@ -7,6 +7,7 @@ function createUserProfileRepo(db) {
         avatarUrl: row.avatar_url,
         cursorColor: row.cursor_color,
         showLineNumbers: !!row.show_line_numbers,
+        theme: row.theme,
         updatedAt: row.updated_at
       };
     },
@@ -14,6 +15,12 @@ function createUserProfileRepo(db) {
       db.prepare(
         "UPDATE user_profile SET label = ?, avatar_url = ?, cursor_color = ?, show_line_numbers = ?, updated_at = datetime('now') WHERE id = 1"
       ).run(label, avatarUrl || null, cursorColor || null, showLineNumbers ? 1 : 0);
+      return this.get();
+    },
+    updateTheme(theme) {
+      db.prepare(
+        "UPDATE user_profile SET theme = ?, updated_at = datetime('now') WHERE id = 1"
+      ).run(theme);
       return this.get();
     }
   };

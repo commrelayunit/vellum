@@ -117,7 +117,8 @@ app.get('/projects', requireAuth, (req, res) => {
       remainingFiles: files.slice(3).map((f) => ({ id: f.id, path: f.path }))
     };
   });
-  res.render('projects', { projects });
+  const profile = userProfileRepo.get();
+  res.render('projects', { projects, theme: profile.theme });
 });
 
 app.post('/api/projects', requireAuth, (req, res) => {
@@ -372,6 +373,17 @@ app.post('/api/profile', requireAuth, (req, res) => {
     cursorColor: typeof cursorColor === 'string' && cursorColor.trim() ? cursorColor.trim() : null,
     showLineNumbers: showLineNumbers === true
   });
+  res.json({ success: true, profile });
+});
+
+const VALID_THEMES = ['system', 'light', 'dark'];
+
+app.post('/api/profile/theme', requireAuth, (req, res) => {
+  const { theme } = req.body;
+  if (!VALID_THEMES.includes(theme)) {
+    return res.status(400).json({ success: false, message: 'Theme must be system, light, or dark' });
+  }
+  const profile = userProfileRepo.updateTheme(theme);
   res.json({ success: true, profile });
 });
 

@@ -30,6 +30,36 @@
   */
   --diff-removed: #9A3324;
   --diff-added: #2D6A3E;
+  /* Lift for floating surfaces (currently just the proposal hover/focus
+     popover below). A separate token rather than a literal box-shadow value
+     so the dark palette below can swap it for something with enough
+     opacity to read against a dark canvas, where a light-mode-strength
+     black shadow all but disappears. */
+  --popover-shadow: 0 2px 6px #0004;
+}
+
+/* Dark palette. Every variable here is the dark-surface counterpart of the
+   same-named one above - swapped wholesale via the data-theme attribute
+   partials/header.ejs (or login.ejs's own inline script, pre-auth) sets on
+   <html> before first paint, so nothing else in this file needs to know
+   which theme is active. Chosen so --ink/--paper, --ink/--vellum,
+   --presence-you/--paper, and --review-copper/--paper all clear WCAG AA
+   (>=4.5:1) for text, matching the light palette's own stated bar above;
+   --diff-removed/--diff-added are only ever used as borders/background
+   tints here (never as text fill), so they're held to the >=3:1 non-text
+   UI contrast minimum instead, with comfortable margin to spare. */
+:root[data-theme="dark"] {
+  --ink: #EDE6D9;
+  --paper: #1E1B16;
+  --presence-you: #469184;
+  --presence-2: #A95F1E;
+  --presence-3: #3F68E4;
+  --review-copper: #E68619;
+  --soft-rule: #4A443C;
+  --vellum: #262220;
+  --diff-removed: #F05942;
+  --diff-added: #2FA35C;
+  --popover-shadow: 0 2px 6px #0008;
 }
 
 * {
@@ -87,6 +117,16 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#theme-select {
+  font-size: 12px;
 }
 
 .app-title {
@@ -702,7 +742,7 @@ select option:hover {
   /* Kept close to the original plain-text popover's own shadow (0 2px 6px
      #0004) - just enough to lift it off the editor text behind it, not a
      pronounced drop shadow. */
-  box-shadow: 0 2px 6px #0004;
+  box-shadow: var(--popover-shadow);
 }
 .proposal-popover-header { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-weight: bold; }
 .proposal-popover-location { margin-left: auto; font-weight: normal; opacity: .65; font-size: 11px; }

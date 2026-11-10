@@ -1,7 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"<% if (theme === 'light' || theme === 'dark') { %> data-theme="<%= theme %>"<% } %>>
 <head>
     <meta charset="UTF-8">
+    <!-- Resolves an unset/"system" preference from the OS/browser before the
+         stylesheet is even requested, so first paint never flashes the wrong
+         theme. Runs only when the server didn't already render an explicit
+         data-theme above (light/dark, from the signed-in user's saved
+         preference) - "system" is deliberately left unresolved server-side
+         since the server has no access to the browser's prefers-color-scheme. -->
+    <script>
+    (function() {
+        if (document.documentElement.getAttribute('data-theme')) return;
+        var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= title %> - Vellum</title>
     <link rel="stylesheet" href="/css/style.css">
@@ -44,6 +57,13 @@
                     </div>
                 </div>
                 <h1 class="app-title">vellum<span class="caret" aria-hidden="true"></span></h1>
+            </div>
+            <div class="header-right">
+                <select id="theme-select" aria-label="Theme" title="Theme">
+                    <option value="system" <% if (theme !== 'light' && theme !== 'dark') { %>selected<% } %>>System</option>
+                    <option value="light" <% if (theme === 'light') { %>selected<% } %>>Light</option>
+                    <option value="dark" <% if (theme === 'dark') { %>selected<% } %>>Dark</option>
+                </select>
             </div>
         </header>
 

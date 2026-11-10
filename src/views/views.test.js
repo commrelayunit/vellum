@@ -83,6 +83,47 @@ test('projects.ejs renders a project card with rename data attributes and an edi
   assert.match(html, /class="btn project-delete-btn"/);
 });
 
+test('header.ejs renders an explicit light/dark theme as a data-theme attribute on <html>', async () => {
+  const dark = await ejs.renderFile(path.join(__dirname, 'partials/header.ejs'), { title: 'Projects', page: 'projects', theme: 'dark' });
+  assert.match(dark, /<html lang="en" data-theme="dark">/);
+
+  const light = await ejs.renderFile(path.join(__dirname, 'partials/header.ejs'), { title: 'Projects', page: 'projects', theme: 'light' });
+  assert.match(light, /<html lang="en" data-theme="light">/);
+});
+
+test('header.ejs omits data-theme when the preference is "system", leaving resolution to the inline script', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'partials/header.ejs'), { title: 'Projects', page: 'projects', theme: 'system' });
+  assert.match(html, /<html lang="en">/);
+  assert.doesNotMatch(html, /data-theme="system"/);
+});
+
+test('header.ejs renders a theme select with the current preference marked selected', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'partials/header.ejs'), { title: 'Projects', page: 'projects', theme: 'dark' });
+  assert.match(html, /id="theme-select"/);
+  assert.match(html, /<option value="dark" selected>/);
+});
+
+test('header.ejs resolves data-theme from prefers-color-scheme via an inline script before the stylesheet loads', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'partials/header.ejs'), { title: 'Projects', page: 'projects', theme: 'system' });
+  const scriptIndex = html.indexOf('matchMedia');
+  const stylesheetIndex = html.indexOf('style.css');
+  assert.ok(scriptIndex > -1, 'expected an inline script resolving prefers-color-scheme');
+  assert.ok(scriptIndex < stylesheetIndex, 'the resolving script must run before the stylesheet link so first paint is never wrong');
+});
+
+test('projects.ejs passes the profile theme through to the header partial', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'projects.ejs'), { projects: [], theme: 'dark' });
+  assert.match(html, /<html lang="en" data-theme="dark">/);
+});
+
+test('settings.ejs passes the profile theme through to the header partial', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'settings.ejs'), {
+    providers: [],
+    profile: { label: 'Test Person', avatarUrl: null, theme: 'light' }
+  });
+  assert.match(html, /<html lang="en" data-theme="light">/);
+});
+
 test('writing.ejs renders file content with no stray whitespace', async () => {
   const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
     project: { name: 'Sample Project' },
@@ -128,6 +169,17 @@ test('writing.ejs passes the profile showLineNumbers preference through to the e
     activeProviders: []
   });
   assert.match(withoutLineNumbers, /data-show-line-numbers="false"/);
+});
+
+test('writing.ejs passes the profile theme through to the header partial', async () => {
+  const html = await ejs.renderFile(path.join(__dirname, 'writing.ejs'), {
+    project: { name: 'Sample Project' },
+    file: { id: 1, path: 'README.md', title: 'README', content: '# Hello' },
+    files: [{ id: 1, path: 'README.md', title: 'README' }],
+    profile: { label: 'Test Person', avatarUrl: null, theme: 'dark' },
+    activeProviders: []
+  });
+  assert.match(html, /<html lang="en" data-theme="dark">/);
 });
 
 test('writing.ejs renders presence avatars with data-color from profile and provider color', async () => {

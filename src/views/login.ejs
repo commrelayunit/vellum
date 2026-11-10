@@ -3,6 +3,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- No signed-in profile exists yet on this page, so there's no saved
+         theme preference to render server-side - always resolve from the
+         browser's prefers-color-scheme before the stylesheet loads, same as
+         partials/header.ejs does for an unset/"system" preference. -->
+    <script>
+    (function() {
+        var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign in - Vellum</title>
     <link rel="stylesheet" href="/css/style.css">

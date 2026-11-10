@@ -62,3 +62,25 @@ test('update() persists showLineNumbers as a real boolean and round-trips throug
   assert.equal(updated.showLineNumbers, true);
   assert.deepEqual(profile.get(), updated);
 });
+
+test('get() defaults theme to "system" before any is set', () => {
+  const { profile } = setup();
+  assert.equal(profile.get().theme, 'system');
+});
+
+test('updateTheme() persists the theme and round-trips through get()', () => {
+  const { profile } = setup();
+  const updated = profile.updateTheme('dark');
+  assert.equal(updated.theme, 'dark');
+  assert.deepEqual(profile.get(), updated);
+});
+
+test('updateTheme() does not change label, avatarUrl, cursorColor, or showLineNumbers', () => {
+  const { profile } = setup();
+  profile.update({ label: 'Velitchko', avatarUrl: 'https://example.com/me.png', cursorColor: '#5b6eae', showLineNumbers: true });
+  const updated = profile.updateTheme('light');
+  assert.equal(updated.label, 'Velitchko');
+  assert.equal(updated.avatarUrl, 'https://example.com/me.png');
+  assert.equal(updated.cursorColor, '#5b6eae');
+  assert.equal(updated.showLineNumbers, true);
+});

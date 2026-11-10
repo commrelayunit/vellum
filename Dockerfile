@@ -17,7 +17,14 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY . .
-COPY --from=build /app/src/public/js/editor-bundle.js ./src/public/js/editor-bundle.js
+# Pulls the whole built output directory (editor-bundle.js, preview-renderer.js/
+# .css, and the content-hashed KaTeX font files) from the build stage, rather
+# than listing files one by one - these are gitignored and NOT excluded in
+# .dockerignore, so without this the bare `COPY . .` above would silently
+# fall back to whatever (if anything) happens to already exist in
+# src/public/js on the host running `docker build`, instead of the output
+# `npm run build:client` just produced in the build stage.
+COPY --from=build /app/src/public/js/ ./src/public/js/
 
 RUN useradd --system --create-home --shell /usr/sbin/nologin vellum \
     && mkdir -p /app/data \

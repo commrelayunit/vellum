@@ -943,6 +943,79 @@ test('POST /api/profile rejects an empty label', async () => {
   server.close();
 });
 
+test('POST /api/profile/theme persists the theme and round-trips it', async () => {
+  const server = await listen();
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const cookie = await login(base);
+    const res = await fetch(`${base}/api/profile/theme`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ theme: 'dark' })
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.profile.theme, 'dark');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/profile/theme rejects a value outside system/light/dark', async () => {
+  const server = await listen();
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const cookie = await login(base);
+    const res = await fetch(`${base}/api/profile/theme`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ theme: 'blue' })
+    });
+    assert.equal(res.status, 400);
+  } finally {
+    server.close();
+  }
+});
+
+test('unauthenticated POST /api/profile/theme redirects to /login', async () => {
+  const server = await listen();
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/profile/theme`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: 'dark' }),
+      redirect: 'manual'
+    });
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get('location'), '/login');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /projects includes the profile theme on <html> via the header partial', async () => {
+  const server = await listen();
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const cookie = await login(base);
+    await fetch(`${base}/api/profile/theme`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ theme: 'dark' })
+    });
+    const res = await fetch(`${base}/projects`, { headers: { Cookie: cookie } });
+    const body = await res.text();
+    assert.match(body, /<html lang="en" data-theme="dark">/);
+  } finally {
+    server.close();
+  }
+});
+
 test('unauthenticated POST /api/profile redirects to /login', async () => {
   const server = await listen();
   const { port } = server.address();
