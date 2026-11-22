@@ -27,3 +27,16 @@ test('preview stamps each task-list item with its 0-based source line, and only 
   assert.match(html, /<li class="task-list-item enabled" data-line="5">/);
   assert.match(html, /<li>not a task<\/li>/);
 });
+
+test('preview renders a real checkbox for `[ ]`/`[x]` at the start of a table cell, not literal brackets', () => {
+  const html = renderMarkdown('| SSL/TLS | Hardened | URL |\n| - | - | - |\n| [ ] | [x] | https://example.test |\n');
+  assert.match(html, /<td data-line="2" data-occurrence="0"><input class="task-list-item-checkbox" type="checkbox"><\/td>/);
+  assert.match(html, /<td data-line="2" data-occurrence="1"><input class="task-list-item-checkbox" checked="" type="checkbox"><\/td>/);
+  assert.doesNotMatch(html, /\[ \]|\[x\]/);
+});
+
+test('preview leaves a table cell alone when the checkbox marker is not the very first thing in it', () => {
+  const html = renderMarkdown('| Note |\n| - |\n| see [ ] below |\n');
+  assert.match(html, /<td>see \[ \] below<\/td>/);
+  assert.doesNotMatch(html, /task-list-item-checkbox/);
+});

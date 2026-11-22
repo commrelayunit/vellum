@@ -581,6 +581,31 @@ select option:hover {
   flex-shrink: 0;
 }
 
+/* GFM tables had no styling at all before this - a bare, borderless browser
+   default <table>, which read as especially broken once cells could hold a
+   real (invisible-border) checkbox input rather than just text. */
+.preview-content table {
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  width: auto;
+}
+
+.preview-content th,
+.preview-content td {
+  border: 1px solid var(--soft-rule);
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+}
+
+.preview-content th {
+  background: var(--vellum);
+  font-weight: bold;
+}
+
+.preview-content td:has(.task-list-item-checkbox) {
+  text-align: center;
+}
+
 .preview-content strong {
   font-weight: bold;
 }

@@ -146,28 +146,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // A task-list checkbox's native click already flips its own `checked`
     // state - this persists that flip back into the real document instead
-    // of leaving it a dead end. `li[data-line]` (set by preview-renderer-
-    // core.js's own core rule) is the checkbox's 0-based source line at
-    // render time; toggling only ever rewrites a single bracket character
-    // in place, never inserting/deleting a line, so every other checkbox's
-    // stored line number stays valid for the rest of this Preview session
-    // even after several toggles.
+    // of leaving it a dead end. Covers both shapes preview-renderer-core.js
+    // renders a checkbox for: a GFM `- [ ]` list item (li[data-line], its
+    // 0-based source line) and a `[ ]` at the start of a table cell
+    // (td/th[data-line] + [data-occurrence], since several such cells can
+    // share one source line). Toggling only ever rewrites a single bracket
+    // character in place, never inserting/deleting a line, so every other
+    // checkbox's stored position stays valid for the rest of this Preview
+    // session even after several toggles.
+    function locateLineCheckboxBracket(lineText, occurrence) {
+        // Finds the `occurrence`-th (0-based) place in this line a checkbox
+        // could start: the very beginning of the line, or right after a
+        // table '|' cell delimiter, with optional spaces - the same "must
+        // be the first thing in the cell" rule preview-renderer-core.js's
+        // own table-checkbox rule applies at render time.
+        const re = /(^|\|)[ \t]*\[([ xX])\]/g;
+        let match; let count = 0;
+        while ((match = re.exec(lineText))) {
+            if (count === occurrence) return match;
+            count++;
+        }
+        return null;
+    }
     function handleTaskCheckboxClick(e) {
         const checkbox = e.target.closest('.task-list-item-checkbox');
         if (!checkbox) return;
-        const li = checkbox.closest('li[data-line]');
         const view = window.__vellumEditorView;
         const revert = () => { checkbox.checked = !checkbox.checked; };
-        if (!li || !view) return revert();
-        const lineNumber = parseInt(li.dataset.line, 10) + 1;
-        if (!(lineNumber >= 1) || lineNumber > view.state.doc.lines) return revert();
-        const line = view.state.doc.line(lineNumber);
-        const match = /^(\s*[-*+]\s+)\[[ xX]\]/.exec(line.text);
-        if (!match) return revert();
-        // +1: match[1] is the list marker/indent BEFORE the '[', so this
-        // skips past that opening bracket too, landing on the space/x/X
-        // character the box's state actually lives in.
-        const bracketFrom = line.from + match[1].length + 1;
+        if (!view) return revert();
+
+        const li = checkbox.closest('li[data-line]');
+        const cell = checkbox.closest('td[data-line], th[data-line]');
+        let bracketFrom;
+        if (li) {
+            const lineNumber = parseInt(li.dataset.line, 10) + 1;
+            if (!(lineNumber >= 1) || lineNumber > view.state.doc.lines) return revert();
+            const line = view.state.doc.line(lineNumber);
+            const match = /^(\s*[-*+]\s+)\[[ xX]\]/.exec(line.text);
+            if (!match) return revert();
+            // +1: match[1] is the list marker/indent BEFORE the '[', so this
+            // skips past that opening bracket too, landing on the
+            // space/x/X character the box's state actually lives in.
+            bracketFrom = line.from + match[1].length + 1;
+        } else if (cell) {
+            const lineNumber = parseInt(cell.dataset.line, 10) + 1;
+            const occurrence = parseInt(cell.dataset.occurrence, 10);
+            if (!(lineNumber >= 1) || lineNumber > view.state.doc.lines || Number.isNaN(occurrence)) return revert();
+            const line = view.state.doc.line(lineNumber);
+            const match = locateLineCheckboxBracket(line.text, occurrence);
+            if (!match) return revert();
+            // -2: match[0] ends in the closing ']', so its state character
+            // is the one right before that.
+            bracketFrom = line.from + match.index + match[0].length - 2;
+        } else {
+            return revert();
+        }
         view.dispatch({ changes: { from: bracketFrom, to: bracketFrom + 1, insert: checkbox.checked ? 'x' : ' ' } });
     }
 

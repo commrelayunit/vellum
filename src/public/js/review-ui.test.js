@@ -53,3 +53,9 @@ test('clicking a Preview task-list checkbox edits the real document instead of b
   assert.match(source, /previewContent\.addEventListener\('click', handleTaskCheckboxClick\)/);
   assert.match(source, /li\.dataset\.line/);
 });
+
+test('clicking a table-cell checkbox is also wired up, not just list-item ones', () => {
+  assert.match(source, /closest\('td\[data-line\], th\[data-line\]'\)/);
+  assert.match(source, /locateLineCheckboxBracket/);
+  assert.match(source, /cell\.dataset\.occurrence/);
+});
