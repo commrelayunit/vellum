@@ -538,8 +538,28 @@ function closePinnedProposalPopover() {
   if (popover) popover.hidden = true;
 }
 
+// Per-character reveal pace for a freshly-created ProposalDiffWidget below,
+// imitating a fast but human typist rather than either an instant pop-in or
+// real token-by-token LLM streaming (the latter would need partial-JSON
+// argument streaming plumbed all the way from chat-completion.js, and the
+// proposal can't even be anchored in the document until its full old_string
+// is known anyway - see the 2026-11-22 design discussion). A brief extra
+// pause after sentence punctuation/newlines reads as a natural typing
+// rhythm rather than a metronome.
+const TYPE_CHAR_DELAY_MIN_MS = 25;
+const TYPE_CHAR_DELAY_MAX_MS = 45;
+const TYPE_PAUSE_CHARS = /[.,!?;:\n]/;
+const TYPE_PAUSE_MIN_MS = 90;
+const TYPE_PAUSE_MAX_MS = 160;
+
 class ProposalDiffWidget extends WidgetType {
   constructor(proposal, color) { super(); this.proposal = proposal; this.color = color; }
+  // Matching on id/new_text/color (not instance identity) is what makes
+  // this "type once": CodeMirror reuses the OLD widget's already-typed DOM
+  // whenever a still-pending proposal compares equal across a later
+  // setProposalMarkers() redraw (e.g. the next poll), rather than calling
+  // toDOM() again - so toDOM() below only ever runs once per proposal, right
+  // when it's new, which is exactly where the typing animation belongs.
   eq(other) { return other.proposal.id === this.proposal.id && other.proposal.new_text === this.proposal.new_text && other.color === this.color; }
   toDOM() {
     const widget = document.createElement('button');
@@ -555,21 +575,46 @@ class ProposalDiffWidget extends WidgetType {
     dot.setAttribute('aria-hidden', 'true');
     widget.appendChild(dot);
     const text = document.createElement('span');
-    text.textContent = this.proposal.new_text;
     widget.appendChild(text);
+    // Full text up front for assistive tech - only the sighted/visual
+    // presentation types itself out; nothing here should make a screen
+    // reader user wait character-by-character for the same information.
     widget.setAttribute('aria-label', `Pending edit proposed by ${this.proposal.provider_label || 'Agent'}. Original text: ${this.proposal.old_text}. Proposed replacement shown inline.`);
     widget.setAttribute('aria-haspopup', 'dialog');
     const show = () => showProposalPopover(widget, this.proposal);
     widget.addEventListener('mouseenter', show); widget.addEventListener('focus', show);
     widget.addEventListener('mouseleave', hideProposalPopover); widget.addEventListener('blur', hideProposalPopover);
     widget.addEventListener('click', () => showProposalPopover(widget, this.proposal, true));
+    this.startTyping(text);
     return widget;
+  }
+  startTyping(textEl) {
+    const full = this.proposal.new_text;
+    let i = 0;
+    const step = () => {
+      i += 1;
+      textEl.textContent = full.slice(0, i);
+      if (i >= full.length) return;
+      const justTyped = full[i - 1];
+      const [min, max] = TYPE_PAUSE_CHARS.test(justTyped)
+        ? [TYPE_PAUSE_MIN_MS, TYPE_PAUSE_MAX_MS]
+        : [TYPE_CHAR_DELAY_MIN_MS, TYPE_CHAR_DELAY_MAX_MS];
+      this.typingTimer = setTimeout(step, min + Math.random() * (max - min));
+    };
+    step();
   }
   ignoreEvent(event) {
     // Let the widget's own focus/hover/click handlers run; only tell
     // CodeMirror to ignore structural events (e.g. selection) it would
     // otherwise try to reinterpret as a document interaction.
     return event.type !== 'mousedown' && event.type !== 'click' && event.type !== 'focus' && event.type !== 'mouseenter' && event.type !== 'mouseleave' && event.type !== 'blur';
+  }
+  destroy() {
+    // Resolved (accepted/rejected/stale/conflict) mid-type, or this editor
+    // view torn down outright: without this, the pending setTimeout chain
+    // would keep right on writing to a textEl that's no longer attached to
+    // anything, forever (the full-length base case above never reached).
+    clearTimeout(this.typingTimer);
   }
 }
 

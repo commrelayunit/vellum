@@ -144,9 +144,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const EYE_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     const PENCIL_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
 
+    // A task-list checkbox's native click already flips its own `checked`
+    // state - this persists that flip back into the real document instead
+    // of leaving it a dead end. `li[data-line]` (set by preview-renderer-
+    // core.js's own core rule) is the checkbox's 0-based source line at
+    // render time; toggling only ever rewrites a single bracket character
+    // in place, never inserting/deleting a line, so every other checkbox's
+    // stored line number stays valid for the rest of this Preview session
+    // even after several toggles.
+    function handleTaskCheckboxClick(e) {
+        const checkbox = e.target.closest('.task-list-item-checkbox');
+        if (!checkbox) return;
+        const li = checkbox.closest('li[data-line]');
+        const view = window.__vellumEditorView;
+        const revert = () => { checkbox.checked = !checkbox.checked; };
+        if (!li || !view) return revert();
+        const lineNumber = parseInt(li.dataset.line, 10) + 1;
+        if (!(lineNumber >= 1) || lineNumber > view.state.doc.lines) return revert();
+        const line = view.state.doc.line(lineNumber);
+        const match = /^(\s*[-*+]\s+)\[[ xX]\]/.exec(line.text);
+        if (!match) return revert();
+        // +1: match[1] is the list marker/indent BEFORE the '[', so this
+        // skips past that opening bracket too, landing on the space/x/X
+        // character the box's state actually lives in.
+        const bracketFrom = line.from + match[1].length + 1;
+        view.dispatch({ changes: { from: bracketFrom, to: bracketFrom + 1, insert: checkbox.checked ? 'x' : ' ' } });
+    }
+
     // Insert preview element after the editor's mount container
     if (editorContainer && previewToggle) {
         editorContainer.parentNode.appendChild(previewContent);
+        previewContent.addEventListener('click', handleTaskCheckboxClick);
 
         previewToggle.addEventListener('click', function() {
             if (editorContainer.style.display === 'none') {
@@ -1032,7 +1060,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 setButtonLoading(sendChatBtn, false);
                 hideToolStatus();
                 chatInput.focus();
-                if (reviewContent && !reviewContent.hidden) loadReview();
+                // Unconditional: a new proposal must paint its inline
+                // editor markers (via __vellumSetProposalMarkers inside
+                // loadReview()) immediately, not only once the user happens
+                // to open the Review tab. Matches setPanel('review')'s own
+                // unconditional call at line ~638.
+                loadReview();
             });
         }
 
@@ -1059,7 +1092,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (document.visibilityState !== 'visible') return;
             loadProviderColors().then(function() {
                 loadHistory();
-                if (reviewContent && !reviewContent.hidden) loadReview();
+                loadReview();
             });
         });
 

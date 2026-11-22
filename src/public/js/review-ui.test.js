@@ -38,3 +38,18 @@ test('review proposal identity chips use the live provider avatar with initials 
   assert.match(source, /buildIdentityChip\(authorLabel, identity\.color, identity\.avatarUrl\)/);
   assert.match(source, /image\.onerror = function\(\) \{ image\.remove\(\); chip\.textContent = initialsFor\(label\); \}/);
 });
+
+test('a new proposal repaints inline editor markers even while the Chat tab is active', () => {
+  // loadReview() is the only path to __vellumSetProposalMarkers - it must
+  // run after every chat completion and visibility-change refresh
+  // unconditionally, not just while the Review tab happens to be open,
+  // otherwise a newly-proposed edit never appears inline until the user
+  // manually opens Review.
+  assert.doesNotMatch(source, /reviewContent\.hidden\) loadReview\(\)/);
+});
+
+test('clicking a Preview task-list checkbox edits the real document instead of being a dead end', () => {
+  assert.match(source, /handleTaskCheckboxClick/);
+  assert.match(source, /previewContent\.addEventListener\('click', handleTaskCheckboxClick\)/);
+  assert.match(source, /li\.dataset\.line/);
+});

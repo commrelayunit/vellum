@@ -8,7 +8,7 @@
 // executing it. They are deliberately structural: they pin the two
 // properties whose violation causes silent, invisible data loss / breakage
 // in a browser, where no test would otherwise catch them.
-const { test } = require('node:test');
+const { test, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -570,4 +570,75 @@ test('LocalCaretWidget considers two widgets with the same color equal, differen
   const c = new LocalCaretWidget('#c96f48');
   assert.equal(a.eq(b), true);
   assert.equal(a.eq(c), false);
+});
+
+// A minimal stand-in for the DOM nodes toDOM() builds - just enough surface
+// (createElement/appendChild/setAttribute/addEventListener/style.setProperty)
+// for the real ProposalDiffWidget class to run unmodified without jsdom.
+function fakeElement() {
+  return {
+    children: [],
+    listeners: {},
+    style: { setProperty() {} },
+    appendChild(child) { this.children.push(child); },
+    setAttribute() {},
+    addEventListener(type, fn) { this.listeners[type] = fn; }
+  };
+}
+
+function loadProposalDiffWidget() {
+  const source = loadSource();
+  // The pacing constants the class body itself references (TYPE_CHAR_DELAY_*
+  // /TYPE_PAUSE_*) are free variables declared above it at module scope -
+  // pulled in verbatim (not duplicated as literals here) so a real change to
+  // the actual pacing is reflected in this test rather than silently
+  // diverging from it.
+  const constsStart = source.indexOf('const TYPE_CHAR_DELAY_MIN_MS');
+  assert.notEqual(constsStart, -1, 'expected the TYPE_CHAR_DELAY_MIN_MS pacing constant');
+  const constsEnd = source.indexOf('class ProposalDiffWidget');
+  const constsSource = source.slice(constsStart, constsEnd);
+  const classSource = extractClassSource(source, 'ProposalDiffWidget');
+  const { WidgetType } = require('@codemirror/view');
+  const fakeDocument = { createElement: () => fakeElement() };
+  // showProposalPopover/hideProposalPopover/closePinnedProposalPopover are
+  // free variables from the module's top level, only ever called from
+  // listeners this test never triggers - stubbed as no-ops.
+  // eslint-disable-next-line no-new-func -- deliberately eval'ing the real source
+  return new Function(
+    'WidgetType', 'document', 'showProposalPopover', 'hideProposalPopover', 'closePinnedProposalPopover',
+    `${constsSource}\n${classSource}\nreturn ProposalDiffWidget;`
+  )(WidgetType, fakeDocument, () => {}, () => {}, () => {});
+}
+
+test('ProposalDiffWidget types its proposed text out character by character, not all at once', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const ProposalDiffWidget = loadProposalDiffWidget();
+  const widget = new ProposalDiffWidget({ id: 1, new_text: 'Hello, world!', old_text: 'x', provider_label: 'Agent' }, '#5b6eae');
+  const dom = widget.toDOM();
+  const textEl = dom.children.find((c) => c !== dom.children[0]);
+
+  // One character in synchronously (toDOM()'s own first step() call), the
+  // rest only after the mocked clock advances. Node's mock timers don't
+  // cascade within a single tick() (a setTimeout scheduled by a callback
+  // during tick(N) isn't itself fired by that same tick()), so this ticks
+  // once per remaining character rather than one big tick.
+  assert.equal(textEl.textContent, 'H');
+  for (let i = 0; i < widget.proposal.new_text.length; i++) t.mock.timers.tick(200);
+  assert.equal(textEl.textContent, 'Hello, world!');
+});
+
+test('ProposalDiffWidget.destroy() stops the typing timer from writing to a detached node', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const ProposalDiffWidget = loadProposalDiffWidget();
+  const widget = new ProposalDiffWidget({ id: 1, new_text: 'A fairly long proposed replacement', old_text: 'x', provider_label: 'Agent' }, '#5b6eae');
+  const dom = widget.toDOM();
+  const textEl = dom.children.find((c) => c !== dom.children[0]);
+
+  t.mock.timers.tick(100);
+  const partial = textEl.textContent;
+  assert.ok(partial.length > 0 && partial.length < widget.proposal.new_text.length, 'expected the reveal to still be mid-way through');
+
+  widget.destroy();
+  t.mock.timers.tick(10000);
+  assert.equal(textEl.textContent, partial, 'destroy() must stop further writes to the (now detached) text node');
 });

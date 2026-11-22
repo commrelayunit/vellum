@@ -19,3 +19,11 @@ test('preview renders hostile raw HTML as inert text', () => {
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
   assert.doesNotMatch(html, /<script|<img/);
 });
+
+test('preview stamps each task-list item with its 0-based source line, and only task items', () => {
+  const html = renderMarkdown('intro\n\n- [ ] todo one\n- [x] done two\n- not a task\n- [ ] todo three\n');
+  assert.match(html, /<li class="task-list-item enabled" data-line="2">/);
+  assert.match(html, /<li class="task-list-item enabled" data-line="3">/);
+  assert.match(html, /<li class="task-list-item enabled" data-line="5">/);
+  assert.match(html, /<li>not a task<\/li>/);
+});
