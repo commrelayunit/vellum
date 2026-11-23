@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 History prior to 1.0.0 was not tracked in this file.
 
+## [1.1.9] - 2026-11-23
+
+### Fixed
+
+- Agents now use the fewest safe review proposals: a coherent transformation
+  within one exact, uniquely bounded Markdown table, list, or section can be
+  proposed as one replacement, while local edits remain targeted and unrelated
+  document regions are not combined.
+
 ## [1.1.7] - 2026-11-02
 
 ### Fixed

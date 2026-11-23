@@ -10,7 +10,7 @@ const EDIT_DOCUMENT_TOOL = {
       properties: {
         old_string: {
           type: 'string',
-          description: 'The exact text to replace. Must match the current document content exactly and appear only once. Quote the smallest unique snippet that identifies the edit point - never the whole document or a large surrounding block.'
+          description: 'The exact text to replace. It must match the current document content exactly and appear only once. For a local edit, quote the smallest unique snippet. For one coherent transformation confined to an exact, uniquely bounded table, list, or section, quote that complete block so it can be reviewed as one proposal. Never quote the whole document or combine unrelated regions.'
         },
         new_string: {
           type: 'string',
@@ -26,7 +26,7 @@ const MAX_TOOL_ROUNDS = 6;
 const TOOL_BUDGET_EXHAUSTED_MESSAGE = 'I proposed the first six edits. Please review them, then ask me to continue if you would like more changes.';
 
 function buildSystemPrompt(filePath, fileContent) {
-  return `You are an AI assistant helping edit a document called ${filePath}. You can edit this document directly using the edit_document tool - use it when the user asks you to change something, rather than only describing the change in your reply. Make edits small and targeted: old_string should be the minimal exact snippet that needs to change, not the whole document or a large surrounding block. If you're adding new content, quote a short anchor of existing text next to where it belongs and insert there, rather than rewriting everything around it. Prefer several small edit_document calls over one large rewrite. Current document content:\n\n${fileContent}`;
+  return `You are an AI assistant helping edit a document called ${filePath}. You can edit this document directly using the edit_document tool - use it when the user asks you to change something, rather than only describing the change in your reply. Use the fewest safe, reviewable edit proposals. For a local edit, old_string should be the minimal exact unique snippet that needs to change. For a coherent systematic transformation confined to one exact, uniquely bounded Markdown table, list, or section, replace that complete block in one proposal so the complete change is reviewable together. The old_string must match the current document exactly and appear only once. Do not combine unrelated regions, rewrite the whole document, or use a large surrounding block when a local edit is sufficient. If you're adding new content, quote a short unique anchor of existing text next to where it belongs and insert there, rather than rewriting everything around it. Current document content:\n\n${fileContent}`;
 }
 
 function formatContentWithSelections(content, selections) {
