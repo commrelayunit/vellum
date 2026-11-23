@@ -23,6 +23,7 @@ const EDIT_DOCUMENT_TOOL = {
 };
 
 const MAX_TOOL_ROUNDS = 6;
+const TOOL_BUDGET_EXHAUSTED_MESSAGE = 'I proposed the first six edits. Please review them, then ask me to continue if you would like more changes.';
 
 function buildSystemPrompt(filePath, fileContent) {
   return `You are an AI assistant helping edit a document called ${filePath}. You can edit this document directly using the edit_document tool - use it when the user asks you to change something, rather than only describing the change in your reply. Make edits small and targeted: old_string should be the minimal exact snippet that needs to change, not the whole document or a large surrounding block. If you're adding new content, quote a short anchor of existing text next to where it belongs and insert there, rather than rewriting everything around it. Prefer several small edit_document calls over one large rewrite. Current document content:\n\n${fileContent}`;
@@ -85,11 +86,18 @@ function createChatCompletionService({ createClient } = {}) {
       ];
 
       let fullText = '';
-      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        const isFinalAllowedRound = round === MAX_TOOL_ROUNDS - 1;
+      // Give the model six opportunities to make reviewable edit proposals,
+      // then make one separate, explicit no-tool request for its final reply.
+      // Omitting `tools` alone is not enough for stateful compatible APIs,
+      // which can retain a prior tool definition for the session.
+      for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+        const isFinalResponseRound = round === MAX_TOOL_ROUNDS;
         const requestBody = { model, messages, stream: true };
-        if (!isFinalAllowedRound && executeTool) {
+        if (!isFinalResponseRound && executeTool) {
           requestBody.tools = [EDIT_DOCUMENT_TOOL];
+        }
+        if (isFinalResponseRound) {
+          requestBody.tool_choice = 'none';
         }
         if (reasoningEffort) {
           requestBody.reasoning_effort = reasoningEffort;
@@ -112,6 +120,15 @@ function createChatCompletionService({ createClient } = {}) {
 
         const toolCalls = Object.values(toolCallAccumulator).filter((call) => call.name);
         if (toolCalls.length === 0) {
+          return fullText;
+        }
+
+        // A compatible provider should honor tool_choice: 'none', but never
+        // silently end the turn if it does not. The tool calls are deliberately
+        // not executed: they would exceed the visible proposal budget.
+        if (isFinalResponseRound) {
+          fullText += TOOL_BUDGET_EXHAUSTED_MESSAGE;
+          onDelta(TOOL_BUDGET_EXHAUSTED_MESSAGE);
           return fullText;
         }
 

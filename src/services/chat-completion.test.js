@@ -344,10 +344,9 @@ test('complete() appends the tool result\'s current document content to the tool
   assert.equal(toolMessage.content, 'Edit applied.\n\nCurrent document content:\n\nbar');
 });
 
-test('complete() stops attaching tools on the final allowed round, forcing a plain reply', async () => {
-  // A model that keeps calling the tool every round should be cut off after
-  // the round cap, with the final request omitting `tools` so the API
-  // cannot return another tool call.
+test('complete() executes six proposal rounds, then explicitly requests a final plain reply', async () => {
+  // The tool budget is six proposals. The next request explicitly disables
+  // tools, so a stateful compatible API cannot silently continue the loop.
   const alwaysToolCall = [
     { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_x', type: 'function', function: { name: 'edit_document', arguments: '{"old_string":"a","new_string":"b"}' } }] } }] }
   ];
@@ -358,7 +357,7 @@ test('complete() stops attaching tools on the final allowed round, forcing a pla
       completions: {
         create: async (request) => {
           requests.push(request);
-          const chunks = requests.length <= 5 ? alwaysToolCall : finalPlain;
+          const chunks = requests.length <= 6 ? alwaysToolCall : finalPlain;
           return { [Symbol.asyncIterator]: async function* () { for (const c of chunks) yield c; } };
         }
       }
@@ -371,9 +370,41 @@ test('complete() stops attaching tools on the final allowed round, forcing a pla
     onDelta: () => {},
     executeTool: async () => ({ success: true, message: 'Edit applied.' })
   });
-  assert.equal(requests.length, 6);
-  assert.equal('tools' in requests[5], false, 'the 6th and final request must not attach tools');
+  assert.equal(requests.length, 7);
+  assert.equal('tools' in requests[6], false, 'the final request must not attach tools');
+  assert.equal(requests[6].tool_choice, 'none', 'the final request must explicitly disable tools');
   assert.equal(fullText, 'Giving up on further edits.');
+});
+
+test('complete() returns a visible final response when a provider ignores the no-tool request', async () => {
+  const toolCall = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_x', type: 'function', function: { name: 'edit_document', arguments: '{"old_string":"a","new_string":"b"}' } }] } }] }
+  ];
+  const requests = [];
+  const executedCalls = [];
+  const deltas = [];
+  const client = {
+    chat: {
+      completions: {
+        create: async (request) => {
+          requests.push(request);
+          return { [Symbol.asyncIterator]: async function* () { for (const chunk of toolCall) yield chunk; } };
+        }
+      }
+    }
+  };
+  const service = createChatCompletionService({ createClient: () => client });
+  const fullText = await service.complete({
+    apiKey: 'k', baseUrl: 'http://x', model: 'm', filePath: 'a.md', fileContent: '',
+    history: [], userMessage: 'keep editing', onDelta: (delta) => deltas.push(delta),
+    executeTool: async () => { executedCalls.push('edit_document'); return { success: true, message: 'Edit proposed.' }; }
+  });
+
+  assert.equal(requests.length, 7);
+  assert.equal(requests[6].tool_choice, 'none');
+  assert.equal(executedCalls.length, 6, 'the over-budget tool call must not be executed');
+  assert.match(fullText, /first six edits/i);
+  assert.deepEqual(deltas, [fullText]);
 });
 
 test('complete() works with no executeTool/onToolStart/onToolEnd passed, matching today\'s callers', async () => {
