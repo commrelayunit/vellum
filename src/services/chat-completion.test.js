@@ -82,7 +82,7 @@ test('complete() tells the model in the system message that it can call edit_doc
   assert.match(capture.request.messages[0].content, /edit_document/);
 });
 
-test('complete() tells the model in the system message to prefer small, targeted edits over rewriting the whole document', async () => {
+test('complete() tells the model to keep local edits targeted and avoid rewriting unrelated document content', async () => {
   const capture = {};
   const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
   await service.complete({
@@ -90,11 +90,29 @@ test('complete() tells the model in the system message to prefer small, targeted
     filePath: 'notes.md', fileContent: '# My Notes', history: [], userMessage: 'hi', onDelta: () => {}
   });
   assert.match(capture.request.messages[0].content, /minimal|small|targeted/i);
-  assert.match(capture.request.messages[0].content, /not the whole document/i);
+  assert.match(capture.request.messages[0].content, /whole document/i);
+  assert.match(capture.request.messages[0].content, /Do not combine unrelated regions/i);
 });
 
-test('the edit_document tool schema itself asks for the smallest unique snippet, not the whole document', () => {
+test('complete() tells the model to group a uniquely bounded logical block into one reviewable proposal', async () => {
+  const capture = {};
+  const service = createChatCompletionService({ createClient: () => capturingClient(capture) });
+  await service.complete({
+    apiKey: 'key', baseUrl: 'http://x', model: 'gpt-5',
+    filePath: 'notes.md', fileContent: '| Task | Owner |\n| --- | --- |\n| Ship | Ada |', history: [], userMessage: 'add two checkbox columns', onDelta: () => {}
+  });
+  const prompt = capture.request.messages[0].content;
+  assert.match(prompt, /fewest safe, reviewable edit proposals/i);
+  assert.match(prompt, /uniquely bounded Markdown table, list, or section/i);
+  assert.match(prompt, /complete block in one proposal/i);
+  assert.match(prompt, /must match the current document exactly and appear only once/i);
+});
+
+test('the edit_document tool schema distinguishes local snippets from uniquely bounded logical blocks', () => {
   assert.match(EDIT_DOCUMENT_TOOL.function.parameters.properties.old_string.description, /smallest|minimal/i);
+  assert.match(EDIT_DOCUMENT_TOOL.function.parameters.properties.old_string.description, /uniquely bounded table, list, or section/i);
+  assert.match(EDIT_DOCUMENT_TOOL.function.parameters.properties.old_string.description, /complete block/i);
+  assert.match(EDIT_DOCUMENT_TOOL.function.parameters.properties.old_string.description, /appear only once/i);
 });
 
 test('complete() includes reasoning_effort only when provided', async () => {
