@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 History prior to 1.0.0 was not tracked in this file.
 
+## [1.1.10] - 2026-11-24
+
+### Fixed
+
+- Rejected review proposals now live in their own independently collapsible
+  history section, collapsed by default alongside accepted history.
+
 ## [1.1.9] - 2026-11-23
 
 ### Fixed
