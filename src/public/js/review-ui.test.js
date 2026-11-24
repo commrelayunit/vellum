@@ -18,12 +18,14 @@ test('review UI no longer offers a live-edit opt-in - agent edits always go thro
   assert.doesNotMatch(source, /editMode/);
 });
 
-test('review UI groups Pending and Accepted independently, with Pending expanded initially', () => {
-  assert.match(source, /const reviewSectionsExpanded = \{ pending: true, accepted: false \};/);
+test('review UI groups Pending, Accepted, and Rejected independently, with only Pending expanded initially', () => {
+  assert.match(source, /const reviewSectionsExpanded = \{ pending: true, accepted: false, rejected: false \};/);
   assert.match(source, /reviewSection\('Pending', 'pending', proposals\.filter\(p => p\.state === 'pending'\)\)/);
   assert.match(source, /reviewSection\('Accepted', 'accepted', proposals\.filter\(p => p\.state === 'accepted'\)\)/);
+  assert.match(source, /reviewSection\('Rejected', 'rejected', proposals\.filter\(p => p\.state === 'rejected'\)\)/);
   assert.match(source, /if \(p\.state === 'pending'\) pendingSection\.body\.appendChild\(card\)/);
   assert.match(source, /else if \(p\.state === 'accepted'\) acceptedSection\.body\.appendChild\(card\)/);
+  assert.match(source, /else if \(p\.state === 'rejected'\) rejectedSection\.body\.appendChild\(card\)/);
 });
 
 test('review disclosure styling remains compact and non-generic', () => {

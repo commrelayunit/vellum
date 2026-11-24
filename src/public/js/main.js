@@ -738,11 +738,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (reviseContextDismiss) reviseContextDismiss.addEventListener('click', clearReviseContext);
 
-    // Keep the two Review groups independently controllable while a refresh
+    // Keep the three Review groups independently controllable while a refresh
     // (including the one after Accept/Reject) redraws their cards. Pending is
-    // deliberately open on first visit; accepted edits are useful history but
-    // should not compete with work that still needs a decision.
-    const reviewSectionsExpanded = { pending: true, accepted: false };
+    // deliberately open on first visit; accepted and rejected edits are useful
+    // history but should not compete with work that still needs a decision.
+    const reviewSectionsExpanded = { pending: true, accepted: false, rejected: false };
     function reviewSection(title, state, proposals) {
         const section = document.createElement('section');
         section.className = `review-section review-section-${state}`;
@@ -787,7 +787,8 @@ document.addEventListener('DOMContentLoaded', function() {
             reviewList.innerHTML = '';
             const pendingSection = reviewSection('Pending', 'pending', proposals.filter(p => p.state === 'pending'));
             const acceptedSection = reviewSection('Accepted', 'accepted', proposals.filter(p => p.state === 'accepted'));
-            reviewList.append(pendingSection.section, acceptedSection.section);
+            const rejectedSection = reviewSection('Rejected', 'rejected', proposals.filter(p => p.state === 'rejected'));
+            reviewList.append(pendingSection.section, acceptedSection.section, rejectedSection.section);
             proposals.forEach(p => {
                 const card = document.createElement('article'); card.className = `proposal-card proposal-${p.state}`;
                 const identity = resolveProviderIdentityById(p.provider_id, p.provider_color, p.provider_label);
@@ -827,8 +828,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 if (p.state === 'pending') pendingSection.body.appendChild(card);
                 else if (p.state === 'accepted') acceptedSection.body.appendChild(card);
-                // Existing non-accepted terminal states remain visible in
-                // their established treatment below the two primary groups.
+                else if (p.state === 'rejected') rejectedSection.body.appendChild(card);
+                // Stale and conflict terminal states remain visible in their
+                // established treatment below the primary review groups.
                 else reviewList.appendChild(card);
             });
         }).catch((error) => { reviewSummary.textContent = error.message || 'Could not load review proposals.'; });
